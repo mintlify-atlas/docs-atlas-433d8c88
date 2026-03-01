@@ -1,0 +1,202 @@
+---
+title: 'Create Post'
+api: 'POST /api/posts'
+description: 'Create a new post with image or video media'
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include the token in the Authorization header:
+
+```
+Authorization: Bearer <token>
+```
+
+## Request
+
+This endpoint accepts multipart/form-data for file uploads.
+
+<ParamField body="title" type="string" required>
+  The title of the post
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The content/description of the post
+</ParamField>
+
+<ParamField body="image" type="file">
+  Image file to upload. Either `image` or `video` is required.
+  
+  **Allowed types:** `image/jpeg`, `image/png`, `image/gif`
+</ParamField>
+
+<ParamField body="video" type="file">
+  Video file to upload. Either `image` or `video` is required.
+  
+  **Allowed types:** `video/mp4`, `video/quicktime`, `video/x-msvideo`
+</ParamField>
+
+<Note>
+  Maximum file size: 100MB
+</Note>
+
+<Warning>
+  Video posts will automatically trigger deepfake analysis. The analysis runs asynchronously, so the initial response will have `analysis_status: "processing"`.
+</Warning>
+
+## Response
+
+<ResponseField name="_id" type="string">
+  Unique identifier for the post
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The title of the post
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The content of the post
+</ResponseField>
+
+<ResponseField name="media_url" type="string">
+  URL path to the uploaded media file (e.g., `/uploads/1234567890-123456789.mp4`)
+</ResponseField>
+
+<ResponseField name="media_type" type="string">
+  Type of media: `image` or `video`
+</ResponseField>
+
+<ResponseField name="creator" type="string">
+  User ID of the post creator
+</ResponseField>
+
+<ResponseField name="analysis_status" type="string">
+  Status of deepfake analysis: `none`, `processing`, `completed`, or `failed`
+  
+  - `none`: No analysis (for image posts)
+  - `processing`: Analysis in progress (for video posts)
+  - `completed`: Analysis finished
+  - `failed`: Analysis encountered an error
+</ResponseField>
+
+<ResponseField name="likes" type="array">
+  Array of user IDs who liked the post (initially empty)
+</ResponseField>
+
+<ResponseField name="comments" type="array">
+  Array of comments (initially empty)
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the post was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the post was last updated
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL - Image Upload
+curl -X POST http://localhost:3000/api/posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "title=My First Post" \
+  -F "content=Check out this amazing image!" \
+  -F "image=@/path/to/image.jpg"
+```
+
+```bash cURL - Video Upload
+curl -X POST http://localhost:3000/api/posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "title=Video Analysis Test" \
+  -F "content=Testing deepfake detection on this video" \
+  -F "video=@/path/to/video.mp4"
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('title', 'My First Post');
+formData.append('content', 'Check out this amazing video!');
+formData.append('video', videoFile);
+
+const response = await fetch('http://localhost:3000/api/posts', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`
+  },
+  body: formData
+});
+
+const post = await response.json();
+```
+
+```python Python
+import requests
+
+url = "http://localhost:3000/api/posts"
+headers = {"Authorization": f"Bearer {token}"}
+data = {
+    "title": "My First Post",
+    "content": "Check out this video!"
+}
+files = {"video": open("/path/to/video.mp4", "rb")}
+
+response = requests.post(url, headers=headers, data=data, files=files)
+post = response.json()
+```
+
+</CodeGroup>
+
+## Response Example
+
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "title": "Video Analysis Test",
+  "content": "Testing deepfake detection on this video",
+  "media_url": "/uploads/1709251200000-123456789.mp4",
+  "media_type": "video",
+  "creator": "507f191e810c19729de860ea",
+  "analysis_status": "processing",
+  "likes": [],
+  "comments": [],
+  "createdAt": "2026-03-01T12:00:00.000Z",
+  "updatedAt": "2026-03-01T12:00:00.000Z"
+}
+```
+
+## Error Responses
+
+<ResponseField name="400 - No Media File">
+  ```json
+  {
+    "message": "No media file uploaded"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="400 - Invalid File Type">
+  ```json
+  {
+    "message": "Invalid file type. Allowed types: video/mp4, video/quicktime, video/x-msvideo"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="401 - Unauthorized">
+  ```json
+  {
+    "message": "No token provided" 
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="500 - Server Error">
+  ```json
+  {
+    "message": "Error message details"
+  }
+  ```
+</ResponseField>

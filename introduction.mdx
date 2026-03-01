@@ -1,0 +1,99 @@
+---
+title: Introduction to IPD
+description: AI-powered social media platform for detecting deepfakes in videos and images using advanced machine learning models
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="IPD Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="IPD Hero Dark"
+/>
+
+## What is IPD?
+
+IPD (Intelligent Post Detector) is an AI-powered social media platform that detects deepfakes in videos and images. Using state-of-the-art machine learning models, IPD analyzes video content frame-by-frame to identify manipulated media with high accuracy.
+
+The platform combines social networking features with advanced deepfake detection capabilities, allowing users to share content while ensuring authenticity through automated AI analysis.
+
+## Dual AI model approach
+
+IPD leverages two powerful deep learning architectures to provide comprehensive deepfake detection:
+
+<CardGroup cols={2}>
+  <Card title="Vision Transformer (ViT)" icon="brain">
+    Modern transformer-based model that analyzes images using self-attention mechanisms. Provides high accuracy on recent deepfake techniques.
+  </Card>
+  <Card title="CNN+LSTM" icon="layer-group">
+    Traditional convolutional neural network combined with LSTM layers for temporal analysis. Excellent for detecting inconsistencies across video frames.
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Frame-by-frame analysis" icon="film">
+    Videos are analyzed frame-by-frame with individual confidence scores for each frame, providing detailed insights into manipulation attempts.
+  </Card>
+  <Card title="Real-time processing" icon="bolt">
+    Upload videos and receive deepfake analysis results automatically. The system extracts frames and runs detection models in the background.
+  </Card>
+  <Card title="Social platform" icon="users">
+    Full-featured social media capabilities including posts, likes, comments, and user profiles. Share and interact with content while maintaining authenticity.
+  </Card>
+  <Card title="Confidence scoring" icon="chart-line">
+    Each analysis provides confidence percentages showing the likelihood of deepfake manipulation, along with detailed statistics on real vs fake frames.
+  </Card>
+</CardGroup>
+
+## How it works
+
+When you upload a video to IPD:
+
+<Steps>
+  <Step title="Frame extraction">
+    The system extracts frames from your video (every 20th frame) using OpenCV.
+  </Step>
+  <Step title="Model analysis">
+    Both the ViT and CNN+LSTM models analyze each extracted frame independently.
+  </Step>
+  <Step title="Confidence calculation">
+    Each frame receives a confidence score indicating whether it's real or fake.
+  </Step>
+  <Step title="Result aggregation">
+    The system aggregates frame-level results to determine the overall authenticity of the video.
+  </Step>
+</Steps>
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with IPD in minutes. Create an account and analyze your first video.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up IPD locally for development with backend, frontend, and ML models.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/signup">
+    Explore the complete API documentation for authentication, posts, and analysis.
+  </Card>
+  <Card title="AI Models" icon="brain" href="/models/overview">
+    Deep dive into the Vision Transformer and CNN+LSTM models powering IPD.
+  </Card>
+</CardGroup>
+
+## Architecture
+
+IPD consists of three main components:
+
+- **Backend (Node.js/Express)**: REST API handling authentication, posts, and orchestrating ML analysis at `backend/index.js:121`
+- **Frontend (React/TypeScript)**: Modern web interface with Vite, React Router, and TailwindCSS at `frontend/src/App.tsx`
+- **ML Servers (Flask/Python)**: Two Flask servers running the ViT model (port 5000) and CNN+LSTM model (port 5001)
+
+<Note>
+  IPD requires both ML models to be running for full functionality. You can compare results from both models to increase detection confidence.
+</Note>

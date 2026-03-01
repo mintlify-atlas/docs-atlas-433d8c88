@@ -1,0 +1,259 @@
+---
+title: "Analyze Frames"
+api: "POST /api/posts/analyze/:postId"
+description: "Analyze video frames for deepfake detection using the primary detection model"
+---
+
+## Overview
+
+This endpoint analyzes a video post for deepfake content by processing extracted frames through the primary detection model. It calculates confidence scores, fake/real frame counts, and updates the post with comprehensive analysis results.
+
+## Authentication
+
+This endpoint requires authentication via JWT token.
+
+<Note>
+Ensure the Authorization header includes a valid Bearer token.
+</Note>
+
+## Path Parameters
+
+<ParamField path="postId" type="string" required>
+  The MongoDB ObjectId of the post to analyze
+</ParamField>
+
+## Response
+
+Returns the updated post object with analysis results embedded in the `deepfake_analysis` field.
+
+<Expandable title="Response Schema">
+  <ResponseField name="_id" type="string">
+    Post ID
+  </ResponseField>
+
+  <ResponseField name="title" type="string">
+    Post title
+  </ResponseField>
+
+  <ResponseField name="content" type="string">
+    Post content
+  </ResponseField>
+
+  <ResponseField name="media_url" type="string">
+    URL to the video file
+  </ResponseField>
+
+  <ResponseField name="media_type" type="string">
+    Type of media ("video")
+  </ResponseField>
+
+  <ResponseField name="creator" type="string">
+    User ID of the post creator
+  </ResponseField>
+
+  <ResponseField name="analysis_status" type="string">
+    Status of the analysis ("completed" after successful analysis)
+  </ResponseField>
+
+  <ResponseField name="deepfake_analysis" type="object">
+    Deepfake analysis results
+    
+    <Expandable title="deepfake_analysis properties">
+      <ResponseField name="is_fake" type="boolean">
+        Overall determination if the video is fake
+      </ResponseField>
+
+      <ResponseField name="confidence" type="number">
+        Overall confidence score from the model
+      </ResponseField>
+
+      <ResponseField name="frames_analysis" type="array">
+        Array of per-frame analysis results
+        
+        <Expandable title="frame object">
+          <ResponseField name="frame" type="string">
+            Frame filename
+          </ResponseField>
+
+          <ResponseField name="confidence" type="number">
+            Confidence score for this frame (0-1)
+          </ResponseField>
+
+          <ResponseField name="is_fake" type="boolean">
+            Whether this frame is detected as fake
+          </ResponseField>
+
+          <ResponseField name="frame_path" type="string">
+            Path to the frame image file
+          </ResponseField>
+        </Expandable>
+      </ResponseField>
+
+      <ResponseField name="summary" type="object">
+        Analysis summary statistics
+        
+        <Expandable title="summary properties">
+          <ResponseField name="status" type="string">
+            Overall verdict: "FAKE" or "REAL"
+          </ResponseField>
+
+          <ResponseField name="confidence_percentage" type="number">
+            Confidence as percentage (0-100), calculated as (fake_frames / total_frames) * 100
+          </ResponseField>
+
+          <ResponseField name="total_frames" type="number">
+            Total number of frames analyzed
+          </ResponseField>
+
+          <ResponseField name="real_frames" type="number">
+            Count of frames classified as real
+          </ResponseField>
+
+          <ResponseField name="fake_frames" type="number">
+            Count of frames classified as fake
+          </ResponseField>
+        </Expandable>
+      </ResponseField>
+    </Expandable>
+  </ResponseField>
+
+  <ResponseField name="createdAt" type="string">
+    Timestamp of post creation
+  </ResponseField>
+
+  <ResponseField name="updatedAt" type="string">
+    Timestamp of last update
+  </ResponseField>
+</Expandable>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.example.com/api/posts/analyze/507f1f77bcf86cd799439011 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.example.com/api/posts/analyze/507f1f77bcf86cd799439011',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const post = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.example.com/api/posts/analyze/507f1f77bcf86cd799439011',
+    headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+)
+
+post = response.json()
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "title": "Sample Video Post",
+  "content": "Check out this video",
+  "media_url": "/uploads/video123.mp4",
+  "media_type": "video",
+  "creator": "507f191e810c19729de860ea",
+  "analysis_status": "completed",
+  "deepfake_analysis": {
+    "is_fake": true,
+    "confidence": 0.87,
+    "frames_analysis": [
+      {
+        "frame": "frame_001.jpg",
+        "confidence": 0.92,
+        "is_fake": true,
+        "frame_path": "/frames/frames_video123/frame_001.jpg"
+      },
+      {
+        "frame": "frame_002.jpg",
+        "confidence": 0.15,
+        "is_fake": false,
+        "frame_path": "/frames/frames_video123/frame_002.jpg"
+      },
+      {
+        "frame": "frame_003.jpg",
+        "confidence": 0.88,
+        "is_fake": true,
+        "frame_path": "/frames/frames_video123/frame_003.jpg"
+      }
+    ],
+    "summary": {
+      "status": "FAKE",
+      "confidence_percentage": 67,
+      "total_frames": 3,
+      "real_frames": 1,
+      "fake_frames": 2
+    }
+  },
+  "createdAt": "2026-03-01T10:30:00.000Z",
+  "updatedAt": "2026-03-01T10:35:00.000Z"
+}
+```
+
+## Error Responses
+
+<ResponseField name="404 Not Found" type="object">
+  Post with the specified ID does not exist
+  
+  ```json
+  {
+    "message": "Post not found"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="500 Internal Server Error" type="object">
+  Analysis failed due to server or Flask service error
+  
+  ```json
+  {
+    "message": "Error message details"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="401 Unauthorized" type="object">
+  Missing or invalid authentication token
+  
+  ```json
+  {
+    "message": "Unauthorized"
+  }
+  ```
+</ResponseField>
+
+## Implementation Details
+
+<Info>
+This endpoint communicates with a Flask server running on `localhost:5000` to perform the actual frame analysis using the primary deepfake detection model.
+</Info>
+
+The analysis process:
+1. Locates the frames directory based on the video filename
+2. Sends frame directory path to Flask analysis service
+3. Receives per-frame analysis results
+4. Calculates summary statistics (fake/real counts, confidence percentage)
+5. Updates the post with complete analysis results
+6. Sets `analysis_status` to "completed"

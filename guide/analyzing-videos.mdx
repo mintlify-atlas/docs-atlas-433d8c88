@@ -1,0 +1,384 @@
+---
+title: 'Analyzing Videos'
+description: 'Learn how to analyze videos for deepfakes using AI models'
+icon: 'magnifying-glass'
+---
+
+## Overview
+
+IPD uses advanced AI models to detect deepfake content in videos. The platform offers two analysis options:
+
+1. **Automatic Analysis** - Runs automatically when you upload a video
+2. **Old Model Analysis** - Optional secondary analysis using an alternative AI model
+
+## Automatic Video Analysis
+
+When you create a post with a video, deepfake analysis begins immediately and automatically.
+
+### Analysis Workflow
+
+<Steps>
+  <Step title="Video Upload">
+    When you upload a video:
+    - The file is saved to the server
+    - Post status is set to `"processing"`
+    - A processing badge appears on your video
+  </Step>
+  
+  <Step title="Frame Extraction">
+    The DeepfakeDetector service extracts sample frames from your video:
+    - Multiple frames are extracted at regular intervals
+    - Each frame is saved for individual analysis
+    - Frames are stored in `/uploads/frames/` directory
+  </Step>
+  
+  <Step title="AI Detection">
+    Each frame is analyzed by the AI model:
+    - Face detection is performed
+    - Deepfake artifacts are identified
+    - A confidence score (0-1) is calculated for each frame
+    - Each frame is classified as REAL or FAKE
+  </Step>
+  
+  <Step title="Results Aggregation">
+    The system combines all frame results:
+    - Calculates average confidence across all frames
+    - Counts real vs. fake frames
+    - Determines overall verdict based on majority vote
+    - Generates summary statistics
+  </Step>
+  
+  <Step title="Status Update">
+    Post status changes to `"completed"` and the analysis results are saved:
+    
+    ```json
+    {
+      "analysis_status": "completed",
+      "deepfake_analysis": {
+        "frames_analysis": [...],
+        "confidence": 0.15,
+        "is_fake": false,
+        "summary": {
+          "status": "REAL",
+          "confidence_percentage": 85,
+          "total_frames": 10,
+          "real_frames": 9,
+          "fake_frames": 1
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### Processing Time
+
+<Info>
+  Analysis typically completes within 30-60 seconds, depending on video length and server load.
+</Info>
+
+The analysis runs asynchronously, so:
+- You don't need to wait on the upload page
+- You can navigate away immediately
+- Your post appears in feeds with a "Processing" badge
+- The badge updates to show results when complete
+
+## Old Model Analysis
+
+For additional verification, you can run a secondary analysis using an alternative AI model.
+
+### When to Use Old Model Analysis
+
+<CardGroup cols={2}>
+  <Card title="Second Opinion" icon="user-check">
+    Get a second AI opinion on borderline or uncertain results.
+  </Card>
+  
+  <Card title="Model Comparison" icon="scale-balanced">
+    Compare results from different AI architectures for confidence.
+  </Card>
+  
+  <Card title="Research" icon="flask">
+    Analyze differences in detection approaches and accuracy.
+  </Card>
+  
+  <Card title="Verification" icon="shield-halved">
+    Verify high-stakes content with multiple detection methods.
+  </Card>
+</CardGroup>
+
+### Running Old Model Analysis
+
+<Steps>
+  <Step title="Navigate to Analysis Page">
+    Go to the detailed analysis page for your video post:
+    - Click on your video post
+    - Or navigate to `/posts/{post_id}/analysis`
+    
+    <Note>
+      The automatic analysis must be complete before you can run old model analysis.
+    </Note>
+  </Step>
+  
+  <Step title="Find Old Model Section">
+    Scroll to the **"Old Model Analysis"** card in the summary section at the top of the page.
+  </Step>
+  
+  <Step title="Click 'See Result (Old Model)'">
+    Click the button to start the analysis. The system will:
+    1. Extract frames from your video (if not already done)
+    2. Send frames to the old model Flask server (port 5001)
+    3. Analyze each frame with the alternative AI model
+    4. Calculate and save results
+    
+    <Info>
+      The button will show "Analyzing..." with a loading spinner while processing.
+    </Info>
+  </Step>
+  
+  <Step title="View Results in New Tab">
+    Results open automatically in a new browser tab at `/old-model-analysis/{post_id}`.
+    
+    The old model analysis is saved and can be viewed again later without re-running.
+  </Step>
+</Steps>
+
+### Old Model Analysis Page
+
+The old model results page displays:
+
+<Tabs>
+  <Tab title="Summary Cards">
+    Four key metric cards:
+    
+    1. **Final Verdict** - REAL or DEEPFAKE classification
+    2. **Confidence Score** - Percentage confidence in the result
+    3. **Frame Analysis** - Count of real vs. fake frames
+    4. **Fake Frames** - Total number of frames classified as fake
+  </Tab>
+  
+  <Tab title="Analyzed Frames">
+    Grid display of all analyzed frames:
+    - Visual preview of each frame
+    - REAL or FAKE badge on each frame
+    - Loading indicators while images load
+  </Tab>
+  
+  <Tab title="Detailed Table">
+    Frame-by-frame breakdown table:
+    
+    | Frame | Status | Confidence | Preview |
+    |-------|--------|------------|----------|
+    | Frame 1 | REAL | 92.5% | [thumbnail] |
+    | Frame 2 | REAL | 88.3% | [thumbnail] |
+    | Frame 3 | FAKE | 65.7% | [thumbnail] |
+  </Tab>
+</Tabs>
+
+## Understanding Results
+
+### Frame Analysis Data
+
+Each analyzed frame includes:
+
+```json
+{
+  "frame": "frame_1.jpg",
+  "frame_path": "/uploads/frames/frame_1.jpg",
+  "confidence": 0.15,
+  "is_fake": false
+}
+```
+
+<AccordionGroup>
+  <Accordion title="frame">
+    The frame filename extracted from the video.
+  </Accordion>
+  
+  <Accordion title="frame_path">
+    Server path to the frame image file for viewing.
+  </Accordion>
+  
+  <Accordion title="confidence">
+    Confidence score from 0 to 1:
+    - **Lower scores (0.0-0.3)**: High confidence the frame is REAL
+    - **Medium scores (0.3-0.7)**: Uncertain
+    - **Higher scores (0.7-1.0)**: High confidence the frame is FAKE
+  </Accordion>
+  
+  <Accordion title="is_fake">
+    Boolean classification:
+    - `true`: Frame classified as deepfake
+    - `false`: Frame classified as authentic
+  </Accordion>
+</AccordionGroup>
+
+### Overall Verdict Calculation
+
+The final verdict is determined by:
+
+1. **Frame Count Comparison**: Count of fake frames vs. real frames
+2. **Majority Vote**: The video is classified based on which type of frame is more common
+3. **Confidence Score**: Average confidence across all frames
+
+```javascript
+const realFrames = frames.filter(f => !f.is_fake).length;
+const fakeFrames = frames.filter(f => f.is_fake).length;
+const isFake = fakeFrames > realFrames;
+const status = isFake ? "FAKE" : "REAL";
+```
+
+<Warning>
+  A video is classified as DEEPFAKE if more than 50% of analyzed frames are detected as fake.
+</Warning>
+
+### Confidence Percentage
+
+The confidence percentage shown in the summary represents:
+
+```javascript
+// For new model
+const confidencePercentage = Math.round((1 - averageConfidence) * 100);
+
+// For old model
+const confidencePercentage = Math.round((fakeFrames / totalFrames) * 100);
+```
+
+<Tabs>
+  <Tab title="New Model">
+    Confidence % = (1 - average confidence score) × 100
+    
+    - Higher % = More confident the video is REAL
+    - Lower % = More confident the video is FAKE
+  </Tab>
+  
+  <Tab title="Old Model">
+    Confidence % = (fake frames / total frames) × 100
+    
+    - Higher % = More frames detected as fake
+    - Lower % = More frames detected as real
+  </Tab>
+</Tabs>
+
+## Technical Implementation
+
+### Frame Extraction API
+
+```
+POST http://localhost:5000/extract-frames
+Content-Type: application/json
+
+{
+  "video_path": "/path/to/video.mp4",
+  "frames_dir": "frames_12345"
+}
+```
+
+### Analysis API (Old Model)
+
+```
+POST http://localhost:5001/analyze-frames
+Content-Type: application/json
+
+{
+  "frames_dir": "frames_12345"
+}
+```
+
+Response:
+```json
+{
+  "frames_analysis": [
+    {
+      "frame": "frame_1.jpg",
+      "frame_path": "/uploads/frames/frame_1.jpg",
+      "confidence": 0.15,
+      "is_fake": false
+    }
+  ],
+  "confidence": 0.18,
+  "is_fake": false,
+  "total_frames": 10,
+  "fake_frames_count": 2,
+  "real_frames_count": 8
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Analysis Stuck on 'Processing'">
+    If your video remains in processing status:
+    
+    **Causes:**
+    - Flask server may not be running
+    - Video file is corrupted
+    - Server error during processing
+    
+    **Solutions:**
+    - Check that the Flask server is running on port 5000
+    - Look at server logs for error messages
+    - Try re-uploading the video
+    - Check that the video file is a valid format
+  </Accordion>
+  
+  <Accordion title="Old Model Analysis Fails">
+    Error: `"Analysis failed: Please ensure both Flask servers are running"`
+    
+    **Solution:**
+    - Verify Flask server on port 5001 is running
+    - Check Flask server logs for errors
+    - Ensure frames were successfully extracted
+    - Verify network connectivity to localhost:5001
+  </Accordion>
+  
+  <Accordion title="Frame Images Not Loading">
+    If frame thumbnails show errors:
+    
+    **Solutions:**
+    - Check that Flask server is serving static files
+    - Verify frames exist in `/uploads/frames/` directory
+    - Check browser console for CORS or 404 errors
+    - Ensure correct Flask URL is configured (port 5000 or 5001)
+  </Accordion>
+  
+  <Accordion title="Invalid Analysis Data">
+    Error: `"No Analysis Available"`
+    
+    **Causes:**
+    - Analysis failed during processing
+    - Database connection issues
+    - Results not saved properly
+    
+    **Solutions:**
+    - Check post analysis_status in database
+    - Review backend logs during video upload
+    - Try re-uploading and re-analyzing the video
+  </Accordion>
+</AccordionGroup>
+
+## Analysis Best Practices
+
+<CardGroup cols={2}>
+  <Card title="High-Quality Videos" icon="video">
+    Upload high-resolution videos with clear faces for more accurate detection.
+  </Card>
+  
+  <Card title="Adequate Lighting" icon="sun">
+    Videos with good lighting provide better results than dark or poorly lit content.
+  </Card>
+  
+  <Card title="Multiple Models" icon="layer-group">
+    Use both models for important verifications to increase confidence.
+  </Card>
+  
+  <Card title="Frame Analysis" icon="image">
+    Review individual frame results to understand why the AI made its decision.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+- [Understanding confidence scores and results](/guide/viewing-results)
+- [View your analysis history](/guide/community)
+- [Share results with the community](/guide/creating-posts)

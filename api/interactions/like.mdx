@@ -1,0 +1,99 @@
+---
+title: "Like Post"
+api: "POST /api/posts/:id/like"
+description: "Toggle like status on a post. If the user has already liked the post, this will unlike it. If not, it will add a like."
+---
+
+## Authentication
+
+This endpoint requires authentication. Include a valid JWT token in the Authorization header.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the post to like/unlike
+</ParamField>
+
+## Response
+
+<ResponseField name="likes" type="number">
+  The total number of likes on the post after the toggle operation
+</ResponseField>
+
+## Toggle Behavior
+
+This endpoint implements toggle functionality:
+- If the authenticated user has **not** previously liked the post, their user ID is added to the likes array
+- If the authenticated user **has** previously liked the post, their user ID is removed from the likes array
+
+The response always returns the updated total like count.
+
+<Note>
+  This endpoint uses a toggle pattern, meaning the same request will alternately like and unlike a post depending on the current state.
+</Note>
+
+## Error Responses
+
+<ResponseField name="message" type="string">
+  Error message describing what went wrong
+</ResponseField>
+
+**Common error responses:**
+- `404` - Post not found
+- `401` - Unauthorized (missing or invalid token)
+- `500` - Internal server error
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.example.com/api/posts/507f1f77bcf86cd799439011/like \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('/api/posts/507f1f77bcf86cd799439011/like', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+
+const data = await response.json();
+console.log(`Total likes: ${data.likes}`);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.example.com/api/posts/507f1f77bcf86cd799439011/like',
+    headers={'Authorization': f'Bearer {token}'}
+)
+
+data = response.json()
+print(f"Total likes: {data['likes']}")
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "likes": 42
+}
+```
+
+## Implementation Details
+
+The endpoint performs the following steps:
+
+1. Validates that the post exists in the database
+2. Checks if the authenticated user's ID exists in the post's `likes` array
+3. If present, removes the user ID (unlike)
+4. If not present, adds the user ID (like)
+5. Saves the updated post and returns the new like count
+
+See `backend/routes/post.js:245-264` for the complete implementation.

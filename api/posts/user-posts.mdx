@@ -1,0 +1,199 @@
+---
+title: 'Get User Posts'
+api: 'GET /api/posts/user/posts'
+description: "Retrieve all posts created by the authenticated user"
+---
+
+## Authentication
+
+This endpoint requires JWT authentication. Include the token in the Authorization header:
+
+```
+Authorization: Bearer <token>
+```
+
+The endpoint returns posts created by the user identified in the JWT token.
+
+## Response
+
+Returns an array of post objects created by the authenticated user, sorted by creation date (newest first).
+
+<ResponseField name="id" type="string">
+  Unique identifier for the post
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The title of the post
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The content of the post
+</ResponseField>
+
+<ResponseField name="media_url" type="string">
+  URL path to the media file
+</ResponseField>
+
+<ResponseField name="media_type" type="string">
+  Type of media: `image` or `video`
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp when the post was created
+</ResponseField>
+
+<ResponseField name="analysis_status" type="string">
+  Status of deepfake analysis: `none`, `processing`, `completed`, or `failed`
+</ResponseField>
+
+<ResponseField name="profiles" type="object">
+  Creator information (will always be the authenticated user)
+  
+  <ResponseField name="username" type="string">
+    Username of the post creator
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="deepfake_analysis" type="object" nullable>
+  Deepfake analysis results (null if not analyzed)
+  
+  <ResponseField name="is_fake" type="boolean">
+    Whether the video is classified as a deepfake
+  </ResponseField>
+  
+  <ResponseField name="confidence" type="number">
+    Average confidence score across all frames (0-1)
+  </ResponseField>
+  
+  <ResponseField name="frames_analysis" type="array">
+    Array of frame-level analysis results
+    
+    <ResponseField name="frame" type="string">
+      Frame identifier/number
+    </ResponseField>
+    
+    <ResponseField name="confidence" type="number">
+      Confidence score for this frame (0-1)
+    </ResponseField>
+    
+    <ResponseField name="is_fake" type="boolean">
+      Whether this frame is classified as fake
+    </ResponseField>
+    
+    <ResponseField name="frame_path" type="string">
+      Path to the extracted frame image
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<Note>
+  Unlike the `/api/posts` endpoint, this endpoint does not include the `summary` object in `deepfake_analysis`. It only includes `is_fake`, `confidence`, and `frames_analysis`.
+</Note>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3000/api/posts/user/posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('http://localhost:3000/api/posts/user/posts', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+});
+
+const myPosts = await response.json();
+console.log(`You have created ${myPosts.length} posts`);
+```
+
+```python Python
+import requests
+
+url = "http://localhost:3000/api/posts/user/posts"
+headers = {"Authorization": f"Bearer {token}"}
+
+response = requests.get(url, headers=headers)
+my_posts = response.json()
+
+print(f"You have created {len(my_posts)} posts")
+```
+
+</CodeGroup>
+
+## Response Example
+
+```json
+[
+  {
+    "id": "507f1f77bcf86cd799439011",
+    "title": "My Video Post",
+    "content": "Testing deepfake detection",
+    "media_url": "/uploads/1709251200000-123456789.mp4",
+    "media_type": "video",
+    "created_at": "2026-03-01T12:00:00.000Z",
+    "analysis_status": "completed",
+    "profiles": {
+      "username": "johndoe"
+    },
+    "deepfake_analysis": {
+      "is_fake": true,
+      "confidence": 0.87,
+      "frames_analysis": [
+        {
+          "frame": "frame_0",
+          "confidence": 0.92,
+          "is_fake": true,
+          "frame_path": "/frames/1709251200000-123456789/frame_0.jpg"
+        },
+        {
+          "frame": "frame_1",
+          "confidence": 0.85,
+          "is_fake": true,
+          "frame_path": "/frames/1709251200000-123456789/frame_1.jpg"
+        },
+        {
+          "frame": "frame_2",
+          "confidence": 0.45,
+          "is_fake": false,
+          "frame_path": "/frames/1709251200000-123456789/frame_2.jpg"
+        }
+      ]
+    }
+  },
+  {
+    "id": "507f1f77bcf86cd799439012",
+    "title": "My Image Post",
+    "content": "Just sharing a photo",
+    "media_url": "/uploads/1709251100000-987654321.jpg",
+    "media_type": "image",
+    "created_at": "2026-03-01T11:00:00.000Z",
+    "analysis_status": "none",
+    "profiles": {
+      "username": "johndoe"
+    },
+    "deepfake_analysis": null
+  }
+]
+```
+
+## Error Responses
+
+<ResponseField name="401 - Unauthorized">
+  ```json
+  {
+    "message": "No token provided"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="500 - Server Error">
+  ```json
+  {
+    "message": "Error message details"
+  }
+  ```
+</ResponseField>

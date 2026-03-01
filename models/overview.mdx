@@ -1,0 +1,154 @@
+---
+title: "AI Models Overview"
+description: "Learn about IPD's dual-model approach for deepfake detection"
+---
+
+## Dual-Model Architecture
+
+IPD employs a **dual-model approach** to maximize detection accuracy across different types of deepfakes. Both models run on separate Flask servers and analyze video content frame-by-frame.
+
+<CardGroup cols={2}>
+  <Card title="Vision Transformer (ViT)" icon="brain" href="/models/vit-transformer">
+    PyTorch-based model running on port 5000
+    - Image size: 224x224
+    - 83.7% accuracy
+  </Card>
+  <Card title="CNN+LSTM Hybrid" icon="network-wired" href="/models/cnn-lstm">
+    TensorFlow/Keras model running on port 5001
+    - Image size: 224x224
+    - Temporal analysis
+  </Card>
+</CardGroup>
+
+## How Detection Works
+
+<Steps>
+  <Step title="Video Upload">
+    User uploads a video file through the web interface
+  </Step>
+  <Step title="Frame Extraction">
+    System extracts every 20th frame from the video using OpenCV
+  </Step>
+  <Step title="Parallel Analysis">
+    Both models analyze extracted frames independently:
+    - ViT model processes frames through transformer architecture
+    - CNN+LSTM model applies convolutional and temporal analysis
+  </Step>
+  <Step title="Confidence Scoring">
+    Each frame receives a confidence score (0.0 to 1.0):
+    - **< 0.5**: Likely fake
+    - **≥ 0.5**: Likely real
+  </Step>
+  <Step title="Verdict Calculation">
+    Overall verdict based on majority voting:
+    - If more frames are fake than real → Video is fake
+    - If more frames are real than fake → Video is real
+  </Step>
+</Steps>
+
+## Frame Sampling Strategy
+
+<Info>
+Both models extract **every 20th frame** from the input video to balance:
+- **Performance**: Reduces processing time significantly
+- **Accuracy**: Captures sufficient temporal diversity
+- **Coverage**: Ensures analysis across entire video duration
+</Info>
+
+## Confidence Threshold
+
+Both models use a **0.5 threshold** for binary classification:
+
+```python
+# Common logic across both models
+confidence = model.predict(frame)
+is_fake = confidence < 0.5  # Below threshold = fake
+```
+
+<Accordion title="Why 0.5 threshold?">
+The 0.5 threshold represents the decision boundary where:
+- Values closer to 1.0 indicate higher confidence the content is **real**
+- Values closer to 0.0 indicate higher confidence the content is **fake**
+- 0.5 is the neutral point where the model is equally uncertain
+
+This threshold is standard for binary classification tasks and can be adjusted based on your use case (e.g., lower threshold for more sensitive fake detection).
+</Accordion>
+
+## Image Preprocessing
+
+Both models normalize input frames to 224x224 pixels:
+
+<Tabs>
+  <Tab title="ViT Model">
+    ```python
+    transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+    ```
+    Uses ImageNet normalization values for transfer learning compatibility.
+  </Tab>
+  <Tab title="CNN+LSTM Model">
+    ```python
+    img = image.load_img(frame_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0  # Normalize to [0, 1]
+    ```
+    Simple normalization to scale pixel values between 0 and 1.
+  </Tab>
+</Tabs>
+
+## Model Selection Guide
+
+<CardGroup cols={2}>
+  <Card title="Use ViT Model When" icon="check">
+    - High accuracy is critical
+    - Processing individual images
+    - You have GPU resources
+    - Working with high-quality footage
+  </Card>
+  <Card title="Use CNN+LSTM When" icon="check">
+    - Temporal patterns are important
+    - Analyzing sequential frames
+    - CPU-only environment
+    - Processing compressed videos
+  </Card>
+</CardGroup>
+
+## Performance Comparison
+
+| Feature | ViT Model | CNN+LSTM Model |
+|---------|-----------|----------------|
+| **Framework** | PyTorch | TensorFlow/Keras |
+| **Port** | 5000 | 5001 |
+| **Accuracy** | 83.7% | Varies |
+| **Image Size** | 224x224 | 224x224 |
+| **Architecture** | Transformer-based | Hybrid CNN+LSTM |
+| **Strengths** | Image-level features | Temporal patterns |
+
+<Note>
+For best results, IPD runs **both models simultaneously** and allows users to compare results. This dual-model approach helps identify edge cases where one model may outperform the other.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ViT Model Details" icon="magnifying-glass" href="/models/vit-transformer">
+    Deep dive into Vision Transformer architecture
+  </Card>
+  <Card title="CNN+LSTM Details" icon="magnifying-glass" href="/models/cnn-lstm">
+    Explore the hybrid temporal model
+  </Card>
+  <Card title="Model Comparison" icon="chart-line" href="/models/comparison">
+    Side-by-side performance analysis
+  </Card>
+  <Card title="API Integration" icon="code" href="/api/posts/create">
+    Learn how to use the analysis endpoints
+  </Card>
+</CardGroup>

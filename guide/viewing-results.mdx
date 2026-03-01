@@ -1,0 +1,492 @@
+---
+title: 'Viewing Results'
+description: 'Understanding analysis results and confidence scores'
+icon: 'chart-bar'
+---
+
+## Overview
+
+After a video is analyzed, IPD provides comprehensive results showing whether the content is authentic or a deepfake. This guide explains how to interpret the results and confidence scores.
+
+## Accessing Analysis Results
+
+<Steps>
+  <Step title="Navigate to Post">
+    Click on any video post to view its details and analysis results.
+  </Step>
+  
+  <Step title="View Analysis Page">
+    For detailed results, go to:
+    - `/posts/{post_id}/analysis` for full analysis view
+    - Or click on your post from the dashboard or community feed
+  </Step>
+</Steps>
+
+<Info>
+  Analysis results are only available for video posts. Image posts do not undergo deepfake analysis.
+</Info>
+
+## Analysis Results Page
+
+The analysis page consists of several sections:
+
+### 1. Header Section
+
+<CardGroup cols={2}>
+  <Card title="Post Information" icon="info-circle">
+    - Post title and author
+    - Upload date
+    - Analysis completion status
+  </Card>
+  
+  <Card title="Quick Actions" icon="bolt">
+    - View original video
+    - Run old model analysis
+    - Share results
+  </Card>
+</CardGroup>
+
+### 2. Summary Cards
+
+Four key metric cards provide an at-a-glance overview:
+
+<Tabs>
+  <Tab title="Final Verdict">
+    **Status**: AUTHENTIC or DEEPFAKE
+    
+    <Note>
+      The verdict is determined by which type of frame (real or fake) is more common in the analysis.
+    </Note>
+    
+    **Visual Indicators:**
+    - 🟢 Green border/background = AUTHENTIC (REAL)
+    - 🔴 Red border/background = DEEPFAKE (FAKE)
+    - ✅ Check icon for authentic content
+    - ⚠️ Warning icon for deepfake content
+    
+    **What it means:**
+    ```javascript
+    const realFrames = frames.filter(f => !f.is_fake).length;
+    const fakeFrames = frames.filter(f => f.is_fake).length;
+    const verdict = realFrames >= fakeFrames ? "AUTHENTIC" : "DEEPFAKE";
+    ```
+  </Tab>
+  
+  <Tab title="Confidence Score">
+    **Percentage**: 0% - 100%
+    
+    Shows the model's confidence in its analysis:
+    - **80-100%**: Very high confidence
+    - **60-79%**: High confidence
+    - **40-59%**: Moderate confidence
+    - **0-39%**: Low confidence
+    
+    **Calculation:**
+    ```javascript
+    const averageConfidence = frames.reduce(
+      (sum, frame) => sum + frame.confidence, 0
+    ) / frames.length;
+    const confidencePercentage = ((1 - averageConfidence) * 100).toFixed(1);
+    ```
+    
+    <Tip>
+      Higher confidence scores indicate the model is more certain about its verdict.
+    </Tip>
+  </Tab>
+  
+  <Tab title="Frame Analysis">
+    **Format**: X/Y real frames
+    
+    Shows the breakdown of analyzed frames:
+    - **X** = Number of frames classified as REAL
+    - **Y** = Total number of frames analyzed
+    
+    **Example:**
+    - "9/10 real frames" = 9 authentic, 1 fake
+    - "3/10 real frames" = 3 authentic, 7 fake
+    
+    <Warning>
+      A video is classified as DEEPFAKE if less than half the frames are real.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Old Model Analysis">
+    **Action Button**: See Result (Old Model)
+    
+    Allows you to run a secondary analysis using an alternative AI model:
+    - Click to start old model analysis
+    - Results open in a new tab
+    - Shows "Analyzing..." during processing
+    - Analysis is saved for future viewing
+    
+    <Info>
+      Use old model analysis to get a second opinion or compare different AI approaches.
+    </Info>
+  </Tab>
+</Tabs>
+
+### 3. Original Video Section
+
+Displays the complete uploaded video:
+- Full playback controls
+- Aspect ratio preserved
+- Served from `/uploads/{filename}`
+
+```jsx
+<video 
+  src="http://localhost:3000/uploads/video.mp4"
+  controls
+  className="w-full h-full object-contain"
+/>
+```
+
+### 4. Analyzed Frames Grid
+
+Visual grid showing all extracted and analyzed frames:
+
+<Steps>
+  <Step title="Frame Preview">
+    Each frame displays:
+    - Thumbnail image preview
+    - Loading spinner while image loads
+    - Error indicator if image fails to load
+  </Step>
+  
+  <Step title="Classification Badge">
+    Color-coded badge on each frame:
+    - **Green "REAL"**: Frame classified as authentic
+    - **Red "FAKE"**: Frame classified as deepfake
+  </Step>
+  
+  <Step title="Grid Layout">
+    Responsive grid:
+    - 2 columns on mobile
+    - 3 columns on tablets
+    - 4 columns on desktop
+  </Step>
+</Steps>
+
+### 5. Detailed Frame Analysis Table
+
+Comprehensive table with per-frame data:
+
+| Column | Description | Example |
+|--------|-------------|----------|
+| **Frame** | Frame number | "Frame 1", "Frame 2" |
+| **Result** | Classification badge | 🟢 REAL or 🔴 FAKE |
+| **Confidence** | Individual confidence score | "92.5%", "65.3%" |
+| **Preview** | Small thumbnail | [Image preview] |
+
+**How to read the table:**
+
+<AccordionGroup>
+  <Accordion title="REAL Badge (Green)">
+    The frame was classified as authentic:
+    - Confidence score shows certainty (higher = more confident)
+    - No significant deepfake artifacts detected
+    - Frame contributes to AUTHENTIC verdict
+  </Accordion>
+  
+  <Accordion title="FAKE Badge (Red)">
+    The frame was classified as a deepfake:
+    - Confidence score shows certainty of forgery
+    - Deepfake artifacts were detected
+    - Frame contributes to DEEPFAKE verdict
+  </Accordion>
+  
+  <Accordion title="Confidence Scores">
+    Per-frame confidence interpretation:
+    - **90-100%**: Very strong classification
+    - **70-89%**: Strong classification
+    - **50-69%**: Moderate classification
+    - **Below 50%**: Weak classification
+    
+    <Note>
+      Individual frame confidence is separate from the overall confidence score.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+## Understanding Confidence Scores
+
+Confidence scores work differently for real vs. fake classifications:
+
+### For REAL Frames
+
+```json
+{
+  "frame": "frame_1.jpg",
+  "confidence": 0.15,
+  "is_fake": false
+}
+```
+
+- **confidence: 0.15** (Low value) = High confidence the frame is REAL
+- Displayed as: **85%** confidence (calculated as `(1 - 0.15) × 100`)
+- Green badge: "REAL"
+
+### For FAKE Frames
+
+```json
+{
+  "frame": "frame_5.jpg",
+  "confidence": 0.87,
+  "is_fake": true
+}
+```
+
+- **confidence: 0.87** (High value) = High confidence the frame is FAKE
+- Displayed as: **87%** confidence
+- Red badge: "FAKE"
+
+<Warning>
+  The raw confidence value is inverse for real frames: lower values mean MORE confident it's real.
+</Warning>
+
+## Analysis Summary Data
+
+The summary object contains aggregated statistics:
+
+```json
+{
+  "summary": {
+    "status": "REAL",
+    "confidence_percentage": 85,
+    "total_frames": 10,
+    "real_frames": 9,
+    "fake_frames": 1
+  }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="status" icon="flag">
+    **"REAL"** or **"FAKE"**
+    
+    Overall classification based on majority vote of frames.
+  </Card>
+  
+  <Card title="confidence_percentage" icon="percent">
+    **0-100**
+    
+    Average confidence across all frames, displayed as a percentage.
+  </Card>
+  
+  <Card title="total_frames" icon="film">
+    **Count**
+    
+    Total number of frames extracted and analyzed from the video.
+  </Card>
+  
+  <Card title="real_frames & fake_frames" icon="list-ol">
+    **Counts**
+    
+    Number of frames classified as real vs. fake. Should sum to total_frames.
+  </Card>
+</CardGroup>
+
+## Comparing Models
+
+When you run old model analysis, you can compare results side-by-side:
+
+<Tabs>
+  <Tab title="New Model Results">
+    **Page**: `/posts/{id}/analysis`
+    
+    Uses the primary AI model:
+    - Automatic analysis on upload
+    - Latest model architecture
+    - Results display on main analysis page
+  </Tab>
+  
+  <Tab title="Old Model Results">
+    **Page**: `/old-model-analysis/{id}`
+    
+    Uses the alternative AI model:
+    - Manual trigger required
+    - Different model architecture
+    - Results open in new tab
+    - Stored separately in OldModelAnalysis collection
+  </Tab>
+</Tabs>
+
+### Key Differences
+
+| Aspect | New Model | Old Model |
+|--------|-----------|------------|
+| **Trigger** | Automatic | Manual |
+| **Server** | Port 5000 | Port 5001 |
+| **Storage** | Post.deepfake_analysis | OldModelAnalysis collection |
+| **Confidence Calc** | `(1 - avg) × 100` | `(fake/total) × 100` |
+
+<Tip>
+  If the two models disagree significantly, review individual frames to understand why.
+</Tip>
+
+## Visual Indicators Throughout the Platform
+
+### Community Feed Badges
+
+Posts in the community feed show analysis results:
+
+<Tabs>
+  <Tab title="REAL Badge (Green)">
+    ```jsx
+    <div className="bg-green-500 text-white">
+      REAL • 85% confidence
+    </div>
+    ```
+    
+    Indicates the video passed deepfake detection.
+  </Tab>
+  
+  <Tab title="DEEPFAKE Badge (Red)">
+    ```jsx
+    <div className="bg-red-500 text-white">
+      DEEPFAKE • 72% confidence
+    </div>
+    ```
+    
+    Indicates potential deepfake content was detected.
+  </Tab>
+  
+  <Tab title="Processing Badge (Yellow)">
+    ```jsx
+    <div className="bg-yellow-500 text-white">
+      <Spinner /> Analyzing...
+    </div>
+    ```
+    
+    Analysis is still in progress.
+  </Tab>
+</Tabs>
+
+### Dashboard Display
+
+Your personal dashboard shows analysis status for all your posts:
+- Completed analyses show verdict and confidence
+- Processing videos show animated spinner
+- Click any post to view full analysis
+
+## Interpreting Results
+
+### High Confidence Results
+
+**85%+ confidence with consistent frame classifications:**
+- Strong indicator of video authenticity or forgery
+- Most frames agree with the verdict
+- AI model is very certain
+
+<Card title="Example: High Confidence REAL" icon="check-circle">
+  - Verdict: AUTHENTIC
+  - Confidence: 92%
+  - Frames: 9/10 real
+  - Interpretation: Very likely authentic video
+</Card>
+
+### Moderate Confidence Results
+
+**50-85% confidence with mixed frame classifications:**
+- Some uncertainty in the analysis
+- Frames may show mixed signals
+- Consider running old model analysis for comparison
+
+<Card title="Example: Moderate Confidence" icon="circle-half-stroke">
+  - Verdict: AUTHENTIC
+  - Confidence: 67%
+  - Frames: 6/10 real
+  - Interpretation: Likely authentic, but with some uncertainty
+</Card>
+
+### Low Confidence Results
+
+**Below 50% confidence with conflicting frames:**
+- High uncertainty in classification
+- Frames show significant disagreement
+- May indicate edge cases or unusual content
+- Recommend manual review of frames
+
+<Warning>
+  Low confidence results should be interpreted carefully. Consider factors like video quality, lighting, and compression artifacts.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No Results Displayed">
+    If the analysis page shows no results:
+    
+    **Possible causes:**
+    - Analysis is still processing
+    - Analysis failed during processing
+    - Post is an image (no analysis performed)
+    
+    **Solutions:**
+    - Check the post's `analysis_status` field
+    - Wait if status is "processing"
+    - Review server logs if status is "failed"
+    - Verify the post is a video, not an image
+  </Accordion>
+  
+  <Accordion title="Frame Images Not Loading">
+    Frames show error icons or fail to load:
+    
+    **Solutions:**
+    - Verify Flask server is running (port 5000)
+    - Check frames exist in `/uploads/frames/` directory
+    - Review browser console for 404 or CORS errors
+    - Ensure frame_path URLs are correct
+  </Accordion>
+  
+  <Accordion title="Inconsistent Results">
+    Results seem contradictory or unexpected:
+    
+    **Considerations:**
+    - Check individual frame scores for outliers
+    - Review video quality and compression
+    - Compare with old model analysis
+    - Consider factors like lighting, resolution, artifacts
+    - Some legitimate videos may have compression artifacts that trigger false positives
+  </Accordion>
+  
+  <Accordion title="Old Model Analysis Not Available">
+    Can't run old model analysis:
+    
+    **Requirements:**
+    - Primary analysis must be completed first
+    - Flask server must be running on port 5001
+    - Frames must have been extracted
+    - Must be authenticated
+    
+    **Check:**
+    - Verify `analysis_status === 'completed'`
+    - Confirm Flask old model server is running
+    - Check browser console for error messages
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Review Individual Frames" icon="magnifying-glass">
+    Don't just rely on the overall verdict - examine individual frames to understand why the AI made its decision.
+  </Card>
+  
+  <Card title="Check Confidence Scores" icon="gauge-high">
+    Higher confidence scores provide more reliable results. Be cautious with low confidence results.
+  </Card>
+  
+  <Card title="Use Multiple Models" icon="layer-group">
+    Run old model analysis for important videos to get a second opinion and increase confidence.
+  </Card>
+  
+  <Card title="Consider Context" icon="lightbulb">
+    Account for video quality, compression, lighting, and other factors that may affect analysis.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+- [Learn about the old model analysis](/guide/analyzing-videos)
+- [Engage with community posts](/guide/community)
+- [Create more posts](/guide/creating-posts)

@@ -1,0 +1,585 @@
+---
+title: 'Frame-by-Frame Analysis'
+description: 'Detailed guide to video frame extraction, analysis, and visualization in IPD'
+icon: 'film'
+---
+
+## Overview
+
+IPD's frame-by-frame analysis provides granular insight into deepfake detection results. Instead of just a binary verdict, users can see exactly which parts of a video are manipulated and with what confidence.
+
+## Frame Extraction
+
+### How It Works
+
+When a video is uploaded, IPD extracts frames at regular intervals:
+
+```python
+# backend/flask_server_2/app.py:79-112
+def extract_frames(video_path, frames_dir):
+    if not os.path.exists(frames_dir):
+        os.makedirs(frames_dir)
+        print(f"Created frames directory: {frames_dir}")
+
+    vidObj = cv2.VideoCapture(video_path)
+    count = 0
+    success = 1
+    frames = []
+    
+    frames_dirname = os.path.basename(frames_dir)
+    
+    while success:
+        success, image = vidObj.read()
+        if not success:
+            break
+            
+        frames_num = 20  # Save every 20th frame
+        if count % frames_num == 0:
+            frame_path = os.path.join(frames_dir, f"frame{count}.jpg")
+            cv2.imwrite(frame_path, image)
+            frame_url = f'/uploads/frames/{frames_dirname}/{os.path.basename(frame_path)}'.jpg')
+            frames.append({
+                'frame': os.path.basename(frame_path),
+                'frame_path': frame_url
+            })
+            print(f"Saved frame: {frame_path}")
+            print(f"Frame URL path: {frame_url}")
+        count += 1
+        
+    vidObj.release()
+    print(f"Total frames extracted: {len(frames)}")
+    return frames
+```
+
+### Sampling Strategy
+
+<Info>
+IPD samples every **20th frame** to balance detection accuracy with processing speed.
+</Info>
+
+**Example**: For a 30 FPS video:
+- 30 seconds = 900 frames total
+- Sampled frames = 900 ÷ 20 = **45 frames analyzed**
+- Coverage: One frame every ~0.67 seconds
+
+This sampling rate provides:
+- Sufficient coverage to detect manipulation
+- Fast processing times (under 30 seconds for most videos)
+- Reasonable storage requirements
+
+### Frame Storage
+
+Extracted frames are stored in organized directories:
+
+```
+backend/flask_server_2/frames/
+├── frames_video123/
+│   ├── frame0.jpg
+│   ├── frame20.jpg
+│   ├── frame40.jpg
+│   └── ...
+└── frames_video456/
+    ├── frame0.jpg
+    ├── frame20.jpg
+    └── ...
+```
+
+<Tabs>
+  <Tab title="Directory Structure">
+    Each video gets its own frame directory:
+    
+    ```javascript
+    // backend/routes/post.js:308-309
+    const videoFileName = path.basename(post.media_url);
+    const framesDir = `frames_${path.parse(videoFileName).name}`;
+    ```
+    
+    The directory name is based on the original video filename.
+  </Tab>
+  
+  <Tab title="Frame Naming">
+    Frames are named by their position in the original video:
+    
+    - `frame0.jpg` - First frame (0th frame)
+    - `frame20.jpg` - Frame at position 20 (~0.67 seconds at 30fps)
+    - `frame40.jpg` - Frame at position 40 (~1.33 seconds at 30fps)
+    
+    This makes it easy to locate the original timestamp.
+  </Tab>
+  
+  <Tab title="URL Access">
+    Frames are accessible via HTTP:
+    
+    ```
+    http://localhost:5000/uploads/frames/frames_video123/frame0.jpg
+    ```
+    
+    The frontend loads these URLs to display frame thumbnails.
+  </Tab>
+</Tabs>
+
+## Individual Frame Analysis
+
+Each extracted frame is analyzed independently:
+
+```python
+# backend/flask_server_2/app.py:114-137
+def analyze_frame(frame_path, threshold=0.5):
+    """Analyze a single frame using the ViT model"""
+    global model
+    try:
+        if model is None:
+            if not load_model():
+                raise Exception("Model not loaded")
+
+        # Read and preprocess frame
+        frame = cv2.imread(frame_path)
+        processed_frame = preprocess_frame(frame)
+        
+        # Get prediction
+        with torch.no_grad():
+            output = model(processed_frame.unsqueeze(0))
+            confidence = float(torch.sigmoid(output).cpu().numpy()[0][0])
+            is_fake = confidence < threshold
+            
+        print(f"Analyzed {frame_path}: confidence = {confidence}, is_fake = {is_fake}")
+        return confidence, is_fake
+        
+    except Exception as e:
+        print(f"Error analyzing frame {frame_path}: {str(e)}")
+        raise
+```
+
+### Analysis Output
+
+For each frame, the system returns:
+
+```typescript
+interface Frame {
+  frame: string;           // Filename (e.g., "frame0.jpg")
+  frame_path: string;      // URL path to image
+  confidence: number;      // 0.0 - 1.0
+  is_fake: boolean;        // true if confidence < 0.5
+}
+```
+
+**Example Response**:
+```json
+{
+  "frame": "frame0.jpg",
+  "frame_path": "/uploads/frames/frames_video123/frame0.jpg",
+  "confidence": 0.87,
+  "is_fake": false
+}
+```
+
+## Results Aggregation
+
+After analyzing all frames, the system aggregates results:
+
+```javascript
+// backend/routes/post.js:156-170
+const totalFrames = analysisResult.frames_analysis.length;
+const fakeFrames = analysisResult.frames_analysis.filter(frame => frame.is_fake).length;
+const realFrames = totalFrames - fakeFrames;
+const averageConfidence = analysisResult.frames_analysis.reduce(
+  (sum, frame) => sum + frame.confidence, 0
+) / totalFrames;
+const confidencePercentage = Math.round((1 - averageConfidence) * 100);
+const isFake = fakeFrames > realFrames;
+
+const summary = {
+  status: isFake ? "FAKE" : "REAL",
+  confidence_percentage: confidencePercentage,
+  total_frames: totalFrames,
+  real_frames: realFrames,
+  fake_frames: fakeFrames
+};
+```
+
+### Summary Metrics
+
+<CardGroup cols={2}>
+  <Card title="Overall Status" icon="circle-check">
+    Determined by majority vote:
+    
+    ```javascript
+    const isFake = fakeFrames > realFrames;
+    ```
+    
+    If more than 50% of frames are fake, the video is classified as FAKE.
+  </Card>
+  
+  <Card title="Confidence Percentage" icon="percent">
+    Average confidence across all frames:
+    
+    ```javascript
+    const averageConfidence = total / frameCount;
+    const percentage = Math.round((1 - averageConfidence) * 100);
+    ```
+  </Card>
+  
+  <Card title="Frame Counts" icon="hashtag">
+    Breakdown of results:
+    - **Total Frames**: Number analyzed
+    - **Real Frames**: Count with confidence ≥ 0.5
+    - **Fake Frames**: Count with confidence < 0.5
+  </Card>
+  
+  <Card title="Verdict" icon="gavel">
+    Final classification:
+    - **REAL**: Majority of frames authentic
+    - **FAKE**: Majority of frames manipulated
+  </Card>
+</CardGroup>
+
+## Visualization
+
+### Analysis Dashboard
+
+Users can view frame analysis through the Video Analysis Dashboard:
+
+```typescript
+// frontend/src/components/VideoAnalysisDashboard.tsx:96-110
+const determineVideoStatus = (frames: Frame[]) => {
+  const realFrames = frames.filter(f => !f.is_fake).length;
+  const fakeFrames = frames.filter(f => f.is_fake).length;
+  const totalConfidence = frames.reduce((sum, frame) => sum + frame.confidence, 0);
+  const averageConfidence = totalConfidence / frames.length;
+  
+  return {
+    isReal: realFrames >= fakeFrames,
+    realCount: realFrames,
+    fakeCount: fakeFrames,
+    totalFrames: frames.length,
+    confidence: averageConfidence
+  };
+};
+```
+
+### Frame Preview Grid
+
+The dashboard shows a preview of the first 3 frames:
+
+```typescript
+// frontend/src/components/VideoAnalysisDashboard.tsx:164-188
+<div className="grid grid-cols-3 gap-2">
+  {post.deepfake_analysis.frames_analysis.slice(0, 3).map((frame, index) => {
+    const imagePath = `${API_URL}${frame.frame_path}`;
+    const isLoaded = loadedImages.has(imagePath);
+
+    return (
+      <div key={index} className="relative aspect-video bg-gray-100">
+        {!isLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        <img 
+          src={imagePath}
+          alt={`Frame ${index + 1}`}
+          className={`w-full h-full object-cover rounded transition-opacity duration-200 ${
+            isLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          onLoad={() => handleImageLoad(imagePath)}
+          onError={() => handleImageError(imagePath)}
+        />
+      </div>
+    );
+  })}
+</div>
+```
+
+<Note>
+Images load asynchronously with loading spinners to provide better UX during network delays.
+</Note>
+
+### Full Analysis View
+
+Clicking "View Full Analysis" shows all frames in a detailed table:
+
+```typescript
+// frontend/src/components/VideoAnalysisDashboard.tsx:242-265
+<table className="min-w-full bg-white border">
+  <thead>
+    <tr className="bg-gray-100">
+      <th className="px-4 py-2 text-left">Frame</th>
+      <th className="px-4 py-2 text-left">Confidence</th>
+      <th className="px-4 py-2 text-left">Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    {selectedPost.deepfake_analysis.frames_analysis.map((frame, index) => (
+      <tr key={index} className="border-t">
+        <td className="px-4 py-2">Frame {index + 1}</td>
+        <td className="px-4 py-2">{(frame.confidence * 100).toFixed(1)}%</td>
+        <td className={`px-4 py-2 font-medium ${
+          frame.is_fake ? 'text-red-600' : 'text-green-600'
+        }`}>
+          {frame.is_fake ? 'FAKE' : 'REAL'}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+```
+
+## User Workflows
+
+### Workflow 1: Automatic Analysis
+
+<Steps>
+  <Step title="Upload Video">
+    User creates a post with a video file. The post is immediately saved with `analysis_status: 'processing'`.
+  </Step>
+  
+  <Step title="Background Processing">
+    The system automatically:
+    1. Extracts frames (every 20th)
+    2. Analyzes each frame with ViT model
+    3. Calculates summary statistics
+    4. Updates post with results
+  </Step>
+  
+  <Step title="View Results">
+    User navigates to their posts or the community feed and sees:
+    - Processing indicator (while analyzing)
+    - Status badge (REAL/FAKE)
+    - Confidence percentage
+    - Frame preview grid
+  </Step>
+  
+  <Step title="Deep Dive">
+    Click "View Full Analysis" to see individual frame results and confidence scores.
+  </Step>
+</Steps>
+
+### Workflow 2: Manual Analysis
+
+Users can trigger analysis on-demand:
+
+```typescript
+// frontend/src/components/VideoAnalysisDashboard.tsx:69-85
+const handleAnalyze = async (postId: string) => {
+  try {
+    const response = await fetch(`${API_URL}/api/posts/analyze/${postId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    if (!response.ok) throw new Error('Analysis failed');
+    
+    const updatedPost = await response.json();
+    setPosts(posts.map(p => p.id === postId ? updatedPost : p));
+  } catch (error) {
+    console.error('Error analyzing frames:', error);
+  }
+};
+```
+
+<Tabs>
+  <Tab title="When to Use">
+    Manual analysis is useful for:
+    - Videos uploaded before automatic analysis was enabled
+    - Re-analyzing with updated models
+    - Testing different detection thresholds
+  </Tab>
+  
+  <Tab title="API Endpoint">
+    ```http
+    POST /api/posts/analyze/:postId
+    Authorization: Bearer <token>
+    ```
+    
+    Returns updated post with analysis results.
+  </Tab>
+</Tabs>
+
+## Model Comparison
+
+IPD allows comparing results from both AI models:
+
+```javascript
+// backend/routes/post.js:357-441
+router.post('/analyze-old-model/:postId', authMiddleware, async (req, res) => {
+  // Extract frames using ViT server (port 5000)
+  const extractResponse = await axios.post('http://localhost:5000/extract-frames', {
+    video_path: videoPath,
+    frames_dir: framesDir
+  });
+
+  // Analyze with CNN+LSTM model (port 5001)
+  const response = await axios.post('http://localhost:5001/analyze-frames', {
+    frames_dir: framesDir
+  });
+
+  // Store results in separate collection
+  oldAnalysis = await OldModelAnalysis.create({
+    post_id: post._id,
+    frames_analysis: response.data.frames_analysis,
+    confidence: response.data.confidence,
+    is_fake: response.data.is_fake,
+    summary: summary
+  });
+});
+```
+
+### Side-by-Side Comparison
+
+Users can view results from both models:
+
+<CardGroup cols={2}>
+  <Card title="Vision Transformer" icon="brain">
+    - Stored in main `Post.deepfake_analysis`
+    - Primary model (83.7% accuracy)
+    - Better at detecting modern deepfakes
+  </Card>
+  
+  <Card title="CNN+LSTM" icon="network-wired">
+    - Stored in separate `OldModelAnalysis` collection
+    - Legacy comparison model
+    - Useful for benchmarking
+  </Card>
+</CardGroup>
+
+## Performance Metrics
+
+### Processing Time
+
+<Accordion title="Frame Extraction">
+  **Duration**: 2-5 seconds per video
+  
+  Depends on:
+  - Video length
+  - Resolution
+  - Codec efficiency
+</Accordion>
+
+<Accordion title="AI Analysis">
+  **Duration**: ~0.5-1 second per frame
+  
+  For a typical 30-second video:
+  - Frames extracted: ~45
+  - Analysis time: 22-45 seconds
+  - Total processing: ~25-50 seconds
+</Accordion>
+
+<Accordion title="Result Storage">
+  **Size**: ~2-5 KB per frame
+  
+  Includes:
+  - Frame metadata (filename, path)
+  - Confidence score (float)
+  - Classification (boolean)
+  - Aggregated summary
+</Accordion>
+
+## API Reference
+
+<Tabs>
+  <Tab title="Analyze Post">
+    ```http
+    POST /api/posts/analyze/:postId
+    Authorization: Bearer <token>
+    ```
+    
+    Triggers frame extraction and analysis for a video post.
+    
+    **Response**:
+    ```json
+    {
+      "id": "...",
+      "deepfake_analysis": {
+        "is_fake": false,
+        "confidence": 0.82,
+        "frames_analysis": [...],
+        "summary": {
+          "status": "REAL",
+          "confidence_percentage": 82,
+          "total_frames": 45,
+          "real_frames": 38,
+          "fake_frames": 7
+        }
+      },
+      "analysis_status": "completed"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Get Old Model Analysis">
+    ```http
+    GET /api/posts/old-model-analysis/:postId
+    Authorization: Bearer <token>
+    ```
+    
+    Retrieves CNN+LSTM analysis results if they exist.
+  </Tab>
+  
+  <Tab title="Analyze with Old Model">
+    ```http
+    POST /api/posts/analyze-old-model/:postId
+    Authorization: Bearer <token>
+    ```
+    
+    Runs analysis using the legacy CNN+LSTM model.
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+### Common Issues
+
+<Warning>
+**Frames Directory Not Found**
+
+Occurs when the frames directory doesn't exist or was deleted.
+
+```python
+if not os.path.exists(full_frames_dir):
+    error_msg = f"Frames directory not found at: {os.path.abspath(full_frames_dir)}"
+    return jsonify({'error': error_msg}), 404
+```
+
+**Solution**: Re-run frame extraction before analysis.
+</Warning>
+
+<Warning>
+**Model Not Loaded**
+
+Occurs when the AI model fails to load at server startup.
+
+```python
+if model is None:
+    if not load_model():
+        raise Exception("Model not loaded")
+```
+
+**Solution**: Check that model weights file exists in the `models/` directory.
+</Warning>
+
+<Warning>
+**Invalid Frame Format**
+
+Occurs when extracted frames are corrupted.
+
+```python
+if np.isnan(confidence):
+    raise ValueError("Model returned NaN confidence")
+```
+
+**Solution**: Re-extract frames or try a different video codec.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deepfake Detection" icon="shield-check" href="/features/deepfake-detection">
+    Learn about the overall detection workflow
+  </Card>
+  
+  <Card title="AI Models" icon="brain" href="/features/ai-models">
+    Understand the models powering frame analysis
+  </Card>
+</CardGroup>

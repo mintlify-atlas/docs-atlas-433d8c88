@@ -1,0 +1,440 @@
+---
+title: Installation
+description: Set up IPD locally for development with backend, frontend, and ML models
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    Version 16 or higher required for the backend and frontend
+  </Card>
+  <Card title="Python" icon="python">
+    Version 3.8+ required for Flask ML servers
+  </Card>
+  <Card title="MongoDB" icon="database">
+    Database for storing users, posts, and analysis results
+  </Card>
+  <Card title="FFmpeg" icon="film">
+    Required for video processing and frame extraction
+  </Card>
+</CardGroup>
+
+<Warning>
+  You'll also need the pre-trained model files:
+  - `as_model_0.837.pt` for the Vision Transformer model
+  - `deepfake_detection_model.h5` for the CNN+LSTM model
+  
+  Place these in their respective Flask server `models/` directories.
+</Warning>
+
+## Clone the repository
+
+Start by cloning the IPD repository:
+
+```bash
+git clone https://github.com/Shubham7204/IPD.git
+cd IPD
+```
+
+## Backend setup
+
+The backend is built with Node.js, Express, and MongoDB.
+
+<Steps>
+  <Step title="Navigate to backend directory">
+    ```bash
+    cd backend
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    Install the required npm packages defined in `backend/package.json`:
+    
+    ```bash
+    npm install
+    ```
+    
+    Key dependencies include:
+    - `express` - Web framework
+    - `mongoose` - MongoDB ODM
+    - `jsonwebtoken` - JWT authentication
+    - `axios` - HTTP client for Flask servers
+    - `express-fileupload` - File upload handling
+    - `fluent-ffmpeg` - Video processing
+    - `cloudinary` - Cloud storage (optional)
+  </Step>
+  
+  <Step title="Configure environment variables">
+    Create a `.env` file in the `backend/` directory:
+    
+    ```bash .env
+    # MongoDB connection string
+    MONGO_URI=mongodb://localhost:27017/ipd
+    
+    # JWT secret for authentication
+    JWT_SECRET=your-secret-key-here
+    
+    # Server port (default: 3000)
+    PORT=3000
+    
+    # Optional: Cloudinary configuration
+    CLOUDINARY_CLOUD_NAME=your-cloud-name
+    CLOUDINARY_API_KEY=your-api-key
+    CLOUDINARY_API_SECRET=your-api-secret
+    ```
+    
+    <Info>
+      The backend connects to MongoDB at `backend/db.js:6` using the `MONGO_URI` environment variable.
+    </Info>
+  </Step>
+  
+  <Step title="Start the backend server">
+    Run the Node.js server:
+    
+    ```bash
+    npm start
+    ```
+    
+    The server will start on port 3000 (or the port specified in your `.env` file). You should see:
+    
+    ```
+    Successfully connected to DB
+    Server is running on port 3000
+    ```
+  </Step>
+</Steps>
+
+## Frontend setup
+
+The frontend is a React application built with Vite, TypeScript, and TailwindCSS.
+
+<Steps>
+  <Step title="Navigate to frontend directory">
+    ```bash
+    cd ../frontend
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    Install the required npm packages defined in `frontend/package.json`:
+    
+    ```bash
+    npm install
+    ```
+    
+    Key dependencies include:
+    - `react` & `react-dom` - UI framework
+    - `react-router-dom` - Client-side routing
+    - `axios` - API requests
+    - `framer-motion` - Animations
+    - `recharts` - Data visualization
+    - `lucide-react` - Icons
+    - TailwindCSS - Styling
+  </Step>
+  
+  <Step title="Configure API endpoint">
+    The frontend API configuration is in `frontend/src/lib/api.ts:1`. Update the `API_URL` if your backend runs on a different port:
+    
+    ```typescript api.ts
+    const API_URL = 'http://localhost:3000/api';
+    ```
+  </Step>
+  
+  <Step title="Start the development server">
+    Run the Vite development server:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    The frontend will be available at `http://localhost:5173`.
+  </Step>
+</Steps>
+
+## Flask ML servers setup
+
+IPD uses two Flask servers for deepfake detection with different models.
+
+### Flask server 1: Vision Transformer (ViT)
+
+Runs on port 5000 and uses the Vision Transformer model.
+
+<Steps>
+  <Step title="Navigate to Flask server directory">
+    ```bash
+    cd ../backend/flask_server_2
+    ```
+  </Step>
+  
+  <Step title="Install Python dependencies">
+    Create a virtual environment and install requirements:
+    
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+    
+    Key dependencies:
+    - `flask` - Web framework
+    - `flask-cors` - CORS support
+    - `torch` - PyTorch for deep learning
+    - `vit-pytorch` - Vision Transformer implementation
+    - `opencv-python` - Video processing
+    - `pillow` - Image processing
+    - `torchvision` - Image transformations
+  </Step>
+  
+  <Step title="Add the ViT model file">
+    Place the pre-trained Vision Transformer model in the `models/` directory:
+    
+    ```bash
+    mkdir -p models
+    # Copy as_model_0.837.pt to models/
+    ```
+    
+    The Flask server loads this model at `flask_server_2/app.py:54`.
+  </Step>
+  
+  <Step title="Start the Flask server">
+    ```bash
+    python app.py
+    ```
+    
+    The server will start on port 5000:
+    
+    ```
+    Model loaded successfully
+    Starting server with ViT model loaded
+     * Running on http://0.0.0.0:5000
+    ```
+  </Step>
+</Steps>
+
+### Flask server 2: CNN+LSTM
+
+Runs on port 5001 and uses the CNN+LSTM model.
+
+<Steps>
+  <Step title="Navigate to Flask server directory">
+    ```bash
+    cd ../flask_server
+    ```
+  </Step>
+  
+  <Step title="Install Python dependencies">
+    Create a virtual environment and install requirements:
+    
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+    
+    Key dependencies:
+    - `flask` - Web framework
+    - `flask-cors` - CORS support
+    - `tensorflow` - TensorFlow for deep learning
+    - `keras` - High-level neural networks API
+    - `opencv-python` - Video processing
+    - `numpy` - Numerical computing
+  </Step>
+  
+  <Step title="Add the CNN+LSTM model file">
+    Place the pre-trained model in the `models/` directory:
+    
+    ```bash
+    mkdir -p models
+    # Copy deepfake_detection_model.h5 to models/
+    ```
+    
+    The Flask server loads this model at `flask_server/app.py:31`.
+  </Step>
+  
+  <Step title="Start the Flask server">
+    ```bash
+    python app.py
+    ```
+    
+    The server will start on port 5001:
+    
+    ```
+    Model loaded successfully
+    Starting server with CNN+LSTM model loaded
+     * Running on http://0.0.0.0:5001
+    ```
+  </Step>
+</Steps>
+
+## Verify the installation
+
+Ensure all components are running:
+
+<Tabs>
+  <Tab title="Backend">
+    Test the backend health:
+    
+    ```bash
+    curl http://localhost:3000/api/posts
+    ```
+    
+    You should receive an empty array or list of posts.
+  </Tab>
+  
+  <Tab title="Frontend">
+    Open your browser and navigate to `http://localhost:5173`. You should see the IPD landing page.
+  </Tab>
+  
+  <Tab title="ViT Flask server">
+    Test the Vision Transformer server:
+    
+    ```bash
+    curl http://localhost:5000/
+    ```
+    
+    The server should respond (may return a 404 for the root path, which is expected).
+  </Tab>
+  
+  <Tab title="CNN+LSTM Flask server">
+    Test the CNN+LSTM server:
+    
+    ```bash
+    curl http://localhost:5001/
+    ```
+    
+    The server should respond (may return a 404 for the root path, which is expected).
+  </Tab>
+</Tabs>
+
+## Directory structure
+
+After installation, your project structure should look like:
+
+```
+IPD/
+├── backend/
+│   ├── db.js                    # MongoDB connection and schemas
+│   ├── index.js                 # Express server and auth routes
+│   ├── package.json             # Node.js dependencies
+│   ├── routes/
+│   │   └── post.js              # Post and analysis routes
+│   ├── services/
+│   │   └── deepfakeDetector.js  # Flask API client
+│   ├── middleware/
+│   │   └── auth.js              # JWT authentication
+│   ├── models/
+│   │   ├── Post.js              # Post schema
+│   │   └── OldModelAnalysis.js  # Analysis results schema
+│   ├── uploads/                 # Uploaded videos
+│   ├── flask_server/            # CNN+LSTM Flask server (port 5001)
+│   │   ├── app.py
+│   │   ├── models/
+│   │   │   └── deepfake_detection_model.h5
+│   │   └── frames/              # Extracted frames
+│   └── flask_server_2/          # ViT Flask server (port 5000)
+│       ├── app.py
+│       ├── models/
+│       │   └── as_model_0.837.pt
+│       └── frames/              # Extracted frames
+└── frontend/
+    ├── src/
+    │   ├── App.tsx              # Main app component
+    │   ├── lib/
+    │   │   └── api.ts           # API client functions
+    │   ├── pages/               # Page components
+    │   └── components/          # Reusable components
+    └── package.json             # Frontend dependencies
+```
+
+## Environment variables reference
+
+Complete list of required environment variables:
+
+<ParamField path="MONGO_URI" type="string" required>
+  MongoDB connection string. Example: `mongodb://localhost:27017/ipd`
+</ParamField>
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key for signing JWT tokens. Use a strong random string.
+</ParamField>
+
+<ParamField path="PORT" type="number">
+  Backend server port. Default: `3000`
+</ParamField>
+
+<ParamField path="CLOUDINARY_CLOUD_NAME" type="string">
+  Cloudinary cloud name for media storage (optional).
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_KEY" type="string">
+  Cloudinary API key (optional).
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_SECRET" type="string">
+  Cloudinary API secret (optional).
+</ParamField>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="MongoDB connection failed">
+    Ensure MongoDB is running:
+    
+    ```bash
+    # Start MongoDB (macOS with Homebrew)
+    brew services start mongodb-community
+    
+    # Start MongoDB (Linux)
+    sudo systemctl start mongod
+    
+    # Start MongoDB (Windows)
+    net start MongoDB
+    ```
+    
+    Verify the connection string in your `.env` file matches your MongoDB configuration.
+  </Accordion>
+  
+  <Accordion title="Flask server model not loading">
+    Ensure you have the correct model files:
+    - `backend/flask_server_2/models/as_model_0.837.pt` (ViT model)
+    - `backend/flask_server/models/deepfake_detection_model.h5` (CNN+LSTM model)
+    
+    Check the console output when starting the Flask servers for specific error messages.
+  </Accordion>
+  
+  <Accordion title="Port already in use">
+    If a port is already in use, you can either:
+    1. Stop the process using that port
+    2. Change the port in the respective configuration:
+       - Backend: `.env` file (`PORT=3001`)
+       - Frontend: `vite.config.ts`
+       - Flask servers: `app.py` (change the `port` parameter in `app.run()`)
+  </Accordion>
+  
+  <Accordion title="CORS errors in browser">
+    The backend at `backend/index.js:18` enables CORS for all origins. If you still encounter CORS errors:
+    1. Ensure the backend server is running
+    2. Check that the frontend is making requests to the correct backend URL
+    3. Clear browser cache and cookies
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Create your first post" icon="plus" href="/quickstart">
+    Follow the quickstart guide to create an account and analyze your first video.
+  </Card>
+  <Card title="Understand the models" icon="brain" href="/models/overview">
+    Learn about the Vision Transformer and CNN+LSTM architectures.
+  </Card>
+  <Card title="Explore the API" icon="code" href="/api/auth/signup">
+    Review the complete API reference for building integrations.
+  </Card>
+  <Card title="Deploy to production" icon="server" href="/deployment/prerequisites">
+    Learn how to deploy IPD to a production environment.
+  </Card>
+</CardGroup>

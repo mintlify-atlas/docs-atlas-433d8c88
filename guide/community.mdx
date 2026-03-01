@@ -1,0 +1,538 @@
+---
+title: 'Community'
+description: 'Browse community posts, comment, and engage with other users'
+icon: 'users'
+---
+
+## Overview
+
+The IPD community feed allows you to discover posts from other users, engage with content through likes and comments, and share your thoughts on deepfake analysis results.
+
+## Accessing the Community Feed
+
+Navigate to the community page:
+- Visit `/community` from the navigation
+- Or click the **"Share a Video"** button from the home page
+
+<Info>
+  The community feed is publicly accessible, but you must be authenticated to like or comment on posts.
+</Info>
+
+## Community Feed Interface
+
+The feed displays posts in reverse chronological order (newest first):
+
+### Feed Layout
+
+<Steps>
+  <Step title="Header Section">
+    - "Trending Now" badge
+    - "Share What's Real" heading
+    - Description of the community
+    - **"Share a Video"** button to create posts
+  </Step>
+  
+  <Step title="Post Cards">
+    Each post displays:
+    - User avatar and username
+    - Post date
+    - Title and content description
+    - Media (image or video with playback controls)
+    - Analysis status badge (for videos)
+    - Engagement metrics
+  </Step>
+  
+  <Step title="Auto-Refresh">
+    Feed automatically polls every 5 seconds when videos are processing to update analysis status.
+  </Step>
+</Steps>
+
+## Post Display Components
+
+### User Information
+
+<CardGroup cols={2}>
+  <Card title="Avatar" icon="circle-user">
+    Circular avatar with user's first initial on a yellow background with black border.
+  </Card>
+  
+  <Card title="Username" icon="at">
+    Displayed as @username with post date next to it.
+  </Card>
+</CardGroup>
+
+### Post Content
+
+```jsx
+<PostCard>
+  {/* User Info */}
+  <Avatar>{username[0]}</Avatar>
+  <Username>@{username}</Username>
+  <Date>{formattedDate}</Date>
+  
+  {/* Content */}
+  <Title>{post.title}</Title>
+  <Description>{post.content}</Description>
+  
+  {/* Media */}
+  {mediaType === 'video' ? <Video /> : <Image />}
+  
+  {/* Analysis Badge */}
+  {analysisStatus && <Badge />}
+</PostCard>
+```
+
+### Analysis Status Badges
+
+<Tabs>
+  <Tab title="REAL (Green)">
+    ```jsx
+    <div className="bg-green-500 text-white">
+      REAL
+      <span>85% confidence</span>
+    </div>
+    ```
+    
+    **Displayed when:**
+    - Video analysis is complete
+    - Result shows authentic content
+    - Majority of frames classified as real
+    
+    **Location:** Bottom-left overlay on video thumbnail
+  </Tab>
+  
+  <Tab title="DEEPFAKE (Red)">
+    ```jsx
+    <div className="bg-red-500 text-white">
+      DEEPFAKE
+      <span>72% confidence</span>
+    </div>
+    ```
+    
+    **Displayed when:**
+    - Video analysis is complete
+    - Result shows potential deepfake
+    - Majority of frames classified as fake
+    
+    **Location:** Bottom-left overlay on video thumbnail
+  </Tab>
+  
+  <Tab title="Processing (Yellow)">
+    ```jsx
+    <div className="bg-yellow-500 text-white">
+      <Spinner />
+      Analyzing...
+    </div>
+    ```
+    
+    **Displayed when:**
+    - Analysis is in progress
+    - Status is "processing"
+    - Results not yet available
+    
+    **Auto-updates:** Feed polls server every 5 seconds to check for completion
+  </Tab>
+  
+  <Tab title="No Badge">
+    No badge is shown when:
+    - Post contains an image (not analyzed)
+    - Analysis hasn't started yet
+    - Analysis failed
+  </Tab>
+</Tabs>
+
+## Browsing Posts
+
+### Viewing a Post
+
+Click anywhere on a post card to:
+- Navigate to the post details page
+- View full content and media
+- See all comments
+- Access analysis results (for videos)
+
+**Post URLs:**
+- Post details: `/posts/{post_id}`
+- Video analysis: `/posts/{post_id}/analysis`
+
+### Media Playback
+
+<CardGroup cols={2}>
+  <Card title="Images" icon="image">
+    - Display as full-width thumbnails
+    - 400px height, object-cover sizing
+    - Click to view post details
+  </Card>
+  
+  <Card title="Videos" icon="video">
+    - Embedded video player with controls
+    - 400px height, object-cover sizing
+    - Play directly in the feed
+    - Click to view analysis page
+  </Card>
+</CardGroup>
+
+### Hover Effects
+
+```jsx
+onHoverStart={() => setIsHovered(true)}
+onHoverEnd={() => setIsHovered(false)}
+```
+
+When hovering over a post:
+- Background changes to light gray
+- Smooth transition effect
+- Cursor changes to pointer
+
+## Liking Posts
+
+Show appreciation for posts by liking them:
+
+<Steps>
+  <Step title="Click the Heart Icon">
+    Navigate to the post details page and click the heart icon below the media.
+  </Step>
+  
+  <Step title="Toggle Like Status">
+    The API toggles your like:
+    - First click: Adds your like
+    - Second click: Removes your like
+    
+    ```javascript
+    const likeIndex = post.likes.indexOf(userId);
+    if (likeIndex === -1) {
+      post.likes.push(userId); // Add like
+    } else {
+      post.likes.splice(likeIndex, 1); // Remove like
+    }
+    ```
+  </Step>
+  
+  <Step title="Visual Feedback">
+    The heart icon updates:
+    - **Liked**: Red filled heart
+    - **Not liked**: Gray outline heart
+    - Like count updates in real-time
+  </Step>
+</Steps>
+
+<Warning>
+  You must be authenticated to like posts. Clicking the heart icon while logged out will redirect you to the login page.
+</Warning>
+
+### Like API Endpoint
+
+```
+POST /api/posts/{postId}/like
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+{
+  "likes_count": 15
+}
+```
+
+## Commenting on Posts
+
+Engage in discussions by commenting on posts:
+
+<Steps>
+  <Step title="Navigate to Post Details">
+    Click on a post to open the full details page with the comments section.
+  </Step>
+  
+  <Step title="Write Your Comment">
+    Find the comment form below the post:
+    - Large textarea input
+    - Placeholder: "Add a comment..."
+    - Required field validation
+    
+    <Tip>
+      Comments support multiple lines and whitespace. Press Enter for new lines.
+    </Tip>
+  </Step>
+  
+  <Step title="Submit Comment">
+    Click the **Send** button (paper plane icon) to post your comment.
+    
+    The system will:
+    1. Validate you're authenticated
+    2. Send comment to the server
+    3. Add comment to the post
+    4. Display your comment immediately
+    5. Clear the input field
+  </Step>
+  
+  <Step title="View Comments">
+    All comments appear below the form:
+    - Newest comments first
+    - Username and email displayed
+    - Post date shown
+    - Light gray background for each comment
+  </Step>
+</Steps>
+
+### Comment Display
+
+```jsx
+<Comment>
+  <Header>
+    <Username>{comment.profiles.username}</Username>
+    <Email>{comment.profiles.email}</Email>
+    <Date>{formattedDate}</Date>
+  </Header>
+  <Content>{comment.content}</Content>
+</Comment>
+```
+
+### Comment API
+
+**Endpoint:**
+```
+POST /api/posts/{postId}/comments
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "content": "Great analysis! This video looks authentic to me."
+}
+```
+
+**Response:**
+```json
+{
+  "id": "comment_123",
+  "content": "Great analysis! This video looks authentic to me.",
+  "created_at": "2026-03-01T10:30:00Z",
+  "profiles": {
+    "username": "user@example.com"
+  }
+}
+```
+
+<Info>
+  Comments are stored with the post and persist across sessions. They're visible to all users.
+</Info>
+
+## Post Engagement Metrics
+
+Each post displays engagement statistics:
+
+<Tabs>
+  <Tab title="Likes Count">
+    - Heart icon with number
+    - Shows total number of likes
+    - Updates in real-time when you like/unlike
+    
+    ```jsx
+    <Heart className="h-6 w-6" />
+    <span>{likesCount}</span>
+    ```
+  </Tab>
+  
+  <Tab title="Comments Count">
+    - Message circle icon with number
+    - Shows total number of comments
+    - Updates when new comments are added
+    
+    ```jsx
+    <MessageCircle className="h-6 w-6" />
+    <span>{commentsCount}</span>
+    ```
+  </Tab>
+</Tabs>
+
+### Engagement Stats Location
+
+**Community Feed:**
+- Not prominently displayed in feed cards
+- Visible on hover or in post details
+
+**Post Details Page:**
+- Displayed below the media
+- Interactive like button
+- Comments count next to comment icon
+
+## Real-time Updates
+
+The community feed includes smart polling for processing videos:
+
+```javascript
+useEffect(() => {
+  const processingPosts = posts.some(
+    post => post.media_type === 'video' && post.analysis_status === 'processing'
+  );
+  
+  if (processingPosts && !pollInterval) {
+    const interval = setInterval(async () => {
+      const data = await api.getPosts();
+      setPosts(data);
+      
+      // Stop polling when all analyses complete
+      if (!data.some(post => post.analysis_status === 'processing')) {
+        clearInterval(interval);
+      }
+    }, 5000); // Poll every 5 seconds
+  }
+}, [posts]);
+```
+
+<Info>
+  Automatic polling stops when all videos finish processing to save resources.
+</Info>
+
+## Creating Posts from Community
+
+The community page includes a prominent **"Share a Video"** button:
+
+<Steps>
+  <Step title="Click Share Button">
+    Click the button in the header section.
+  </Step>
+  
+  <Step title="Navigate to Create Post">
+    You'll be redirected to `/create-post`.
+  </Step>
+  
+  <Step title="Fill Out Form">
+    Complete the post creation form with title, content, and media.
+  </Step>
+  
+  <Step title="Return to Community">
+    After posting, your new post appears in the community feed.
+  </Step>
+</Steps>
+
+## Empty State
+
+When no posts exist in the community:
+
+```jsx
+<EmptyState>
+  <Emoji>✨</Emoji>
+  <Heading>Be the First</Heading>
+  <Description>
+    Start the conversation by sharing your first video!
+  </Description>
+</EmptyState>
+```
+
+<Tip>
+  The empty state encourages users to create the first post and start building the community.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Posts Not Loading">
+    If the feed shows no posts or loading errors:
+    
+    **Solutions:**
+    - Check backend server is running (port 3000)
+    - Verify database connection
+    - Check browser console for errors
+    - Try refreshing the page
+    - Ensure you're not blocking API requests
+  </Accordion>
+  
+  <Accordion title="Can't Like or Comment">
+    If engagement features don't work:
+    
+    **Causes:**
+    - Not authenticated
+    - Token expired
+    - Network issues
+    
+    **Solutions:**
+    - Check you're logged in
+    - Sign in again to refresh token
+    - Verify network connectivity
+    - Check browser console for 401 errors
+  </Accordion>
+  
+  <Accordion title="Videos Not Playing">
+    If videos fail to load or play:
+    
+    **Solutions:**
+    - Check video file exists in /uploads
+    - Verify backend server is running
+    - Check browser console for 404 errors
+    - Ensure video format is supported (MP4 recommended)
+    - Try refreshing the page
+  </Accordion>
+  
+  <Accordion title="Analysis Badge Not Updating">
+    If processing badge doesn't change to results:
+    
+    **Causes:**
+    - Analysis still in progress
+    - Flask server not running
+    - Analysis failed
+    
+    **Solutions:**
+    - Wait longer (analysis can take 30-60 seconds)
+    - Check Flask server status (port 5000)
+    - Review backend logs for errors
+    - Manually refresh the page
+    - Check post analysis_status in database
+  </Accordion>
+  
+  <Accordion title="Comments Not Appearing">
+    If your comment doesn't show up:
+    
+    **Solutions:**
+    - Refresh the page
+    - Check that comment was saved (no error message)
+    - Verify you're authenticated
+    - Check network tab for failed requests
+    - Ensure comment content is not empty
+  </Accordion>
+</AccordionGroup>
+
+## Community Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Be Respectful" icon="handshake">
+    Engage positively with other users and their content.
+  </Card>
+  
+  <Card title="Share Authentic Content" icon="certificate">
+    Upload genuine videos to help train and test the detection system.
+  </Card>
+  
+  <Card title="Meaningful Comments" icon="comment">
+    Leave thoughtful comments that add value to the discussion.
+  </Card>
+  
+  <Card title="Report Issues" icon="flag">
+    If you notice problems with analysis or inappropriate content, report it.
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Steps>
+  <Step title="Regular Browsing">
+    Check the feed regularly to discover new content and stay engaged with the community.
+  </Step>
+  
+  <Step title="Engage Authentically">
+    Like and comment on posts that genuinely interest you or where you have insights to share.
+  </Step>
+  
+  <Step title="Share Quality Content">
+    When creating posts, share high-quality videos with clear titles and descriptions.
+  </Step>
+  
+  <Step title="Review Analysis Results">
+    Click through to detailed analysis pages to understand how the AI made its decisions.
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Create your own posts](/guide/creating-posts)
+- [Understand analysis results](/guide/viewing-results)
+- [Analyze videos with multiple models](/guide/analyzing-videos)

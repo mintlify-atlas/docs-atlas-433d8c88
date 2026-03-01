@@ -1,0 +1,220 @@
+---
+title: Prerequisites
+description: System requirements and dependencies needed to deploy the IPD application
+---
+
+## Overview
+
+Before deploying the Intelligent Post Detector (IPD) application, ensure your system meets the following requirements and has all necessary dependencies installed.
+
+## System Requirements
+
+<CardGroup cols={2}>
+  <Card title="Operating System" icon="desktop">
+    - Linux (Ubuntu 20.04+ recommended)
+    - macOS 11.0+
+    - Windows 10/11 (with WSL2 for Python components)
+  </Card>
+  <Card title="Hardware" icon="microchip">
+    - 8GB RAM minimum (16GB recommended)
+    - 4 CPU cores minimum
+    - 20GB free disk space
+    - GPU recommended for ML models (CUDA-compatible)
+  </Card>
+</CardGroup>
+
+## Required Software
+
+<Steps>
+  <Step title="Node.js">
+    Node.js version 18.x or higher is required for both backend and frontend.
+    
+    ```bash
+    # Check Node.js version
+    node --version
+    
+    # Should output v18.x.x or higher
+    ```
+    
+    <Info>
+      Download Node.js from [nodejs.org](https://nodejs.org/) if not installed.
+    </Info>
+  </Step>
+
+  <Step title="Python">
+    Python 3.8 or higher is required for the Flask ML servers.
+    
+    ```bash
+    # Check Python version
+    python --version
+    # or
+    python3 --version
+    
+    # Should output Python 3.8.x or higher
+    ```
+  </Step>
+
+  <Step title="MongoDB">
+    MongoDB 5.0 or higher is required for data persistence.
+    
+    ```bash
+    # Check MongoDB version
+    mongod --version
+    ```
+    
+    <Note>
+      You can use MongoDB Atlas (cloud) instead of a local installation. See [MongoDB Atlas](https://www.mongodb.com/atlas) for setup instructions.
+    </Note>
+  </Step>
+
+  <Step title="FFmpeg">
+    FFmpeg is required for video processing.
+    
+    ```bash
+    # Check FFmpeg installation
+    ffmpeg -version
+    ```
+    
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install ffmpeg
+    ```
+    
+    ```bash macOS
+    brew install ffmpeg
+    ```
+    
+    ```bash Windows
+    # Download from https://ffmpeg.org/download.html
+    # Add to system PATH
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="OpenCV Dependencies">
+    OpenCV requires system libraries for image/video processing.
+    
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt update
+    sudo apt install -y \
+      libsm6 \
+      libxext6 \
+      libxrender-dev \
+      libgomp1 \
+      libglib2.0-0
+    ```
+    
+    ```bash macOS
+    # Usually included with OpenCV Python package
+    # No additional dependencies needed
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Development Tools
+
+<CardGroup cols={2}>
+  <Card title="Package Managers" icon="box">
+    - **npm** or **yarn** (comes with Node.js)
+    - **pip** (comes with Python)
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    - **Git** for cloning the repository
+  </Card>
+</CardGroup>
+
+## API Keys and Services
+
+The following external services require API keys:
+
+<AccordionGroup>
+  <Accordion title="Google Generative AI (Gemini)">
+    Required for AI-powered content analysis and generation.
+    
+    1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+    2. Create a new API key
+    3. Save the key as `GEMINI_API_KEY` in your `.env` file
+  </Accordion>
+
+  <Accordion title="Cloudinary">
+    Required for media file storage and delivery.
+    
+    1. Create account at [Cloudinary](https://cloudinary.com/)
+    2. Get your cloud name, API key, and API secret from the dashboard
+    3. Add credentials to your `.env` file:
+       - `CLOUDINARY_CLOUD_NAME`
+       - `CLOUDINARY_API_KEY`
+       - `CLOUDINARY_API_SECRET`
+  </Accordion>
+
+  <Accordion title="Google Maps (Optional)">
+    Required if using location features.
+    
+    1. Visit [Google Cloud Console](https://console.cloud.google.com/)
+    2. Enable Maps JavaScript API
+    3. Create API key and add to frontend `.env` as `VITE_GOOGLE_MAPS_API_KEY`
+  </Accordion>
+
+  <Accordion title="MongoDB Connection">
+    Required for database access.
+    
+    **For MongoDB Atlas:**
+    1. Create cluster at [MongoDB Atlas](https://www.mongodb.com/atlas)
+    2. Configure network access (whitelist your IP or 0.0.0.0/0 for development)
+    3. Create database user
+    4. Get connection string and add to `.env` as `MONGO_URI`
+    
+    **For Local MongoDB:**
+    ```bash
+    MONGO_URI=mongodb://localhost:27017/ipd
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Port Requirements
+
+Ensure the following ports are available:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Backend Server | 3000 | Node.js Express API |
+| Frontend Dev Server | 5173 | Vite development server |
+| Flask Server 1 (ViT) | 5000 | Vision Transformer model |
+| Flask Server 2 (CNN+LSTM) | 5001 | Deepfake detection model |
+| MongoDB | 27017 | Database (if running locally) |
+
+<Warning>
+  Make sure these ports are not blocked by firewall and are not in use by other applications.
+</Warning>
+
+## Verification
+
+Verify all prerequisites are installed:
+
+```bash
+# Check all required software versions
+node --version
+python3 --version
+mongod --version
+ffmpeg -version
+git --version
+```
+
+## Next Steps
+
+Once all prerequisites are met, proceed to:
+
+<CardGroup cols={3}>
+  <Card title="Backend Setup" icon="server" href="/deployment/backend-setup">
+    Configure and start the backend server
+  </Card>
+  <Card title="Frontend Setup" icon="browser" href="/deployment/frontend-setup">
+    Set up the React frontend application
+  </Card>
+  <Card title="ML Models" icon="brain" href="/deployment/ml-models">
+    Deploy Flask ML servers and models
+  </Card>
+</CardGroup>

@@ -1,0 +1,389 @@
+---
+title: Flask Server Configuration
+description: Configure and run the Flask servers for deepfake detection models
+---
+
+IPD uses two Flask servers to handle video deepfake detection using different AI models. Both servers run independently and are called by the Express backend for video analysis.
+
+## Server Overview
+
+<CardGroup cols={2}>
+  <Card title="Flask Server (ViT Model)" icon="brain" color="#3b82f6">
+    Port 5000 - Vision Transformer model for primary deepfake detection
+  </Card>
+  <Card title="Flask Server 2 (CNN-LSTM)" icon="network-wired" color="#8b5cf6">
+    Port 5001 - CNN+LSTM model for comparative analysis
+  </Card>
+</CardGroup>
+
+## Flask Server (Port 5000)
+
+The primary Flask server uses a Vision Transformer (ViT) model for deepfake detection.
+
+### Configuration
+
+**Location:** `backend/flask_server_2/app.py`
+
+**Port:** `5000`
+
+**Model:** Vision Transformer (ViT)
+- Image size: 224x224
+- Patch size: 32
+- Model file: `models/as_model_0.837.pt`
+
+### Model Architecture
+
+```python backend/flask_server_2/app.py:42-52
+model = ViT(
+    image_size=224,
+    patch_size=32,
+    num_classes=1,
+    dim=1024,
+    depth=6,
+    heads=16,
+    mlp_dim=2048,
+    dropout=0.1,
+    emb_dropout=0.1
+)
+```
+
+### Directory Structure
+
+```bash
+flask_server_2/
+├── app.py              # Main Flask application
+├── models/             # AI model weights
+│   └── as_model_0.837.pt
+├── uploads/            # Uploaded video files
+└── frames/             # Extracted video frames
+```
+
+### API Endpoints
+
+<ParamField path="POST /analyze" type="endpoint">
+  Analyzes a video file for deepfake detection.
+  
+  **Request:**
+  - Content-Type: `multipart/form-data`
+  - Body: `video` (video file)
+  
+  **Response:**
+  ```json
+  {
+    "frames_analysis": [
+      {
+        "frame": "frame0.jpg",
+        "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+        "confidence": 0.87,
+        "is_fake": false
+      }
+    ],
+    "confidence": 0.85,
+    "is_fake": false,
+    "total_frames": 10,
+    "fake_frames_count": 2,
+    "real_frames_count": 8
+  }
+  ```
+</ParamField>
+
+<ParamField path="POST /extract-frames" type="endpoint">
+  Extracts frames from a video file.
+  
+  **Request:**
+  ```json
+  {
+    "video_path": "/path/to/video.mp4",
+    "frames_dir": "frames_video"
+  }
+  ```
+  
+  **Response:**
+  ```json
+  {
+    "success": true,
+    "message": "Frames extracted successfully",
+    "frames_count": 10
+  }
+  ```
+</ParamField>
+
+<ParamField path="GET /uploads/frames/<path>" type="endpoint">
+  Serves extracted frame images.
+</ParamField>
+
+### Frame Extraction
+
+Frames are extracted every 20th frame from uploaded videos:
+
+```python backend/flask_server_2/app.py:97-98
+frames_num = 20  # Save every 20th frame
+if count % frames_num == 0:
+```
+
+### Running the Server
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    cd backend/flask_server_2
+    pip install -r requirements.txt
+    ```
+    
+    Required packages:
+    - Flask
+    - flask-cors
+    - torch
+    - vit-pytorch
+    - opencv-python
+    - Pillow
+    - torchvision
+  </Step>
+  
+  <Step title="Verify model file">
+    Ensure the ViT model weights exist:
+    
+    ```bash
+    ls models/as_model_0.837.pt
+    ```
+    
+    <Warning>
+      The server will fail to start if the model file is missing.
+    </Warning>
+  </Step>
+  
+  <Step title="Start the server">
+    ```bash
+    python app.py
+    ```
+    
+    Expected output:
+    ```
+    Model loaded successfully
+    Starting server with ViT model loaded
+     * Running on http://0.0.0.0:5000
+    ```
+  </Step>
+</Steps>
+
+## Flask Server 2 (Port 5001)
+
+The secondary Flask server uses a CNN+LSTM model for comparative deepfake detection.
+
+### Configuration
+
+**Location:** `backend/flask_server/app.py`
+
+**Port:** `5001`
+
+**Model:** CNN+LSTM (TensorFlow/Keras)
+- Model file: `models/deepfake_detection_model.h5`
+- Input size: 224x224
+
+### Directory Structure
+
+```bash
+flask_server/
+├── app.py                            # Main Flask application
+├── models/                           # AI model weights
+│   └── deepfake_detection_model.h5
+├── uploads/                          # Uploaded video files
+└── frames/                           # Extracted video frames
+```
+
+### API Endpoints
+
+<ParamField path="POST /analyze" type="endpoint">
+  Analyzes a video file using the CNN+LSTM model.
+  
+  **Request:**
+  - Content-Type: `multipart/form-data`
+  - Body: `video` (video file)
+  
+  **Response:** Same format as Flask Server (port 5000)
+</ParamField>
+
+<ParamField path="POST /analyze-frames" type="endpoint">
+  Analyzes pre-extracted frames from a directory.
+  
+  **Request:**
+  ```json
+  {
+    "frames_dir": "frames_video_name"
+  }
+  ```
+  
+  **Response:**
+  ```json
+  {
+    "frames_analysis": [...],
+    "confidence": 0.82,
+    "is_fake": true,
+    "total_frames": 10,
+    "fake_frames_count": 7,
+    "real_frames_count": 3
+  }
+  ```
+</ParamField>
+
+<ParamField path="GET /frames/<path>" type="endpoint">
+  Serves frame images from the flask_server_2 frames directory.
+  
+  **Note:** Cross-references frames from the other Flask server for analysis comparison.
+</ParamField>
+
+### Model Loading
+
+```python backend/flask_server/app.py:27-41
+def load_model():
+    global model
+    try:
+        model_path = os.path.join(MODEL_FOLDER, 'deepfake_detection_model.h5')
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at {model_path}")
+        
+        print(f"Loading model from {model_path}")
+        model = tf.keras.models.load_model(model_path, compile=False)
+        print("Model loaded successfully")
+        return True
+    except Exception as e:
+        print(f"Error loading model: {str(e)}")
+        return False
+```
+
+### Running the Server
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    cd backend/flask_server
+    pip install -r requirements.txt
+    ```
+    
+    Required packages:
+    - Flask
+    - flask-cors
+    - tensorflow
+    - opencv-python
+    - numpy
+  </Step>
+  
+  <Step title="Verify model file">
+    Ensure the CNN+LSTM model exists:
+    
+    ```bash
+    ls models/deepfake_detection_model.h5
+    ```
+  </Step>
+  
+  <Step title="Start the server">
+    ```bash
+    python app.py
+    ```
+    
+    Expected output:
+    ```
+    Model loaded successfully
+    Starting server with CNN+LSTM model loaded
+     * Running on http://0.0.0.0:5001
+    ```
+  </Step>
+</Steps>
+
+## Integration with Express Backend
+
+The Express backend communicates with both Flask servers for video analysis:
+
+### Primary Analysis (ViT Model - Port 5000)
+
+```javascript backend/routes/post.js:312-314
+const response = await axios.post('http://localhost:5000/analyze-frames', {
+  frames_dir: framesDir
+});
+```
+
+### Comparative Analysis (CNN+LSTM - Port 5001)
+
+```javascript backend/routes/post.js:390-392
+const response = await axios.post('http://localhost:5001/analyze-frames', {
+  frames_dir: framesDir
+});
+```
+
+## CORS Configuration
+
+Both servers enable CORS to accept requests from the Express backend:
+
+```python
+from flask_cors import CORS
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+```
+
+## Running Both Servers
+
+For full functionality, both Flask servers must be running simultaneously:
+
+```bash
+# Terminal 1 - ViT Model Server
+cd backend/flask_server_2
+python app.py
+
+# Terminal 2 - CNN+LSTM Server
+cd backend/flask_server
+python app.py
+
+# Terminal 3 - Express Backend
+cd backend
+npm start
+```
+
+<Info>
+  All three servers (Express on port 3000, Flask on ports 5000 and 5001) must be running for complete deepfake detection functionality.
+</Info>
+
+## Troubleshooting
+
+### Port Already in Use
+
+If you see `Address already in use` errors:
+
+```bash
+# Find process using the port
+lsof -i :5000
+lsof -i :5001
+
+# Kill the process
+kill -9 <PID>
+```
+
+### Model Not Found
+
+Ensure model files are in the correct directories:
+- `flask_server_2/models/as_model_0.837.pt` (ViT model)
+- `flask_server/models/deepfake_detection_model.h5` (CNN+LSTM model)
+
+### Memory Issues
+
+Large video files may cause memory issues:
+- Implement file size limits (currently 100MB)
+- Reduce frame extraction frequency
+- Use smaller batch sizes for model inference
+
+### Connection Refused
+
+If Express backend cannot reach Flask servers:
+1. Verify both Flask servers are running
+2. Check firewall settings
+3. Ensure correct ports (5000, 5001)
+4. Verify CORS is enabled
+
+## Performance Optimization
+
+<Info>
+  **Tips for better performance:**
+  - Use GPU acceleration for model inference (CUDA for PyTorch/TensorFlow)
+  - Implement request queuing for concurrent video processing
+  - Cache model weights in memory
+  - Use asynchronous processing for long-running analyses
+</Info>

@@ -1,0 +1,312 @@
+---
+title: 'Deepfake Detection'
+description: 'Learn how IPD uses AI to detect manipulated videos and images in real-time'
+icon: 'shield-check'
+---
+
+## Overview
+
+IPD's deepfake detection system analyzes uploaded videos using two powerful AI models to identify manipulated content. When a user uploads a video, the system automatically processes it frame-by-frame and provides a detailed analysis report.
+
+## How It Works
+
+<Steps>
+  <Step title="Video Upload">
+    Users upload videos through the post creation interface. The system accepts MP4, QuickTime, and AVI formats up to 100MB.
+    
+    ```javascript
+    // backend/routes/post.js:100-116
+    const mediaFile = req.files.image || req.files.video;
+    const mediaType = req.files.image ? 'image' : 'video';
+    
+    // Validate file type
+    const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    if (!allowedTypes.includes(mediaFile.mimetype)) {
+      return res.status(400).json({ 
+        message: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}` 
+      });
+    }
+    ```
+  </Step>
+  
+  <Step title="Frame Extraction">
+    The system extracts frames from the video at regular intervals (every 20th frame) for efficient analysis.
+    
+    ```python
+    # backend/flask_server_2/app.py:79-112
+    def extract_frames(video_path, frames_dir):
+        vidObj = cv2.VideoCapture(video_path)
+        count = 0
+        frames = []
+        
+        while success:
+            success, image = vidObj.read()
+            if not success:
+                break
+                
+            frames_num = 20  # Save every 20th frame
+            if count % frames_num == 0:
+                frame_path = os.path.join(frames_dir, f"frame{count}.jpg")
+                cv2.imwrite(frame_path, image)
+                frames.append({
+                    'frame': os.path.basename(frame_path),
+                    'frame_path': frame_url
+                })
+            count += 1
+    ```
+  </Step>
+  
+  <Step title="AI Analysis">
+    Each extracted frame is analyzed by the Vision Transformer (ViT) model to determine authenticity.
+    
+    ```python
+    # backend/flask_server_2/app.py:114-137
+    def analyze_frame(frame_path, threshold=0.5):
+        # Preprocess frame
+        frame = cv2.imread(frame_path)
+        processed_frame = preprocess_frame(frame)
+        
+        # Get prediction from ViT model
+        with torch.no_grad():
+            output = model(processed_frame.unsqueeze(0))
+            confidence = float(torch.sigmoid(output).cpu().numpy()[0][0])
+            is_fake = confidence < threshold
+            
+        return confidence, is_fake
+    ```
+  </Step>
+  
+  <Step title="Results Aggregation">
+    The system calculates overall results by analyzing all frames and determining if the majority are real or fake.
+    
+    ```javascript
+    // backend/routes/post.js:156-170
+    const totalFrames = analysisResult.frames_analysis.length;
+    const fakeFrames = analysisResult.frames_analysis.filter(frame => frame.is_fake).length;
+    const realFrames = totalFrames - fakeFrames;
+    const averageConfidence = analysisResult.frames_analysis.reduce(
+      (sum, frame) => sum + frame.confidence, 0
+    ) / totalFrames;
+    const isFake = fakeFrames > realFrames;
+    
+    const summary = {
+      status: isFake ? "FAKE" : "REAL",
+      confidence_percentage: Math.round((1 - averageConfidence) * 100),
+      total_frames: totalFrames,
+      real_frames: realFrames,
+      fake_frames: fakeFrames
+    };
+    ```
+  </Step>
+</Steps>
+
+## Analysis Status Flow
+
+The deepfake detection follows a clear status progression:
+
+<Tabs>
+  <Tab title="None">
+    Initial status when a video is first uploaded. No analysis has been performed yet.
+    
+    **User Action**: Click "Analyze Video" button to start detection.
+  </Tab>
+  
+  <Tab title="Processing">
+    The video is being analyzed. Frames are being extracted and processed by the AI model.
+    
+    **Duration**: Typically 10-30 seconds depending on video length.
+    
+    **What's Happening**:
+    - Extracting frames at 20-frame intervals
+    - Running each frame through the ViT model
+    - Calculating confidence scores
+  </Tab>
+  
+  <Tab title="Completed">
+    Analysis is complete. Users can view:
+    - Overall verdict (REAL or FAKE)
+    - Confidence percentage
+    - Frame-by-frame breakdown
+    - Visual frame previews
+  </Tab>
+  
+  <Tab title="Failed">
+    Analysis encountered an error. Common causes:
+    - Corrupted video file
+    - Unsupported video codec
+    - Server timeout
+    
+    **Solution**: Try re-uploading the video or contact support.
+  </Tab>
+</Tabs>
+
+## Detection Results
+
+### Verdict Determination
+
+The system uses a majority-vote approach:
+
+<Info>
+If more than 50% of analyzed frames are classified as "FAKE", the entire video receives a FAKE verdict. Otherwise, it's classified as REAL.
+</Info>
+
+### Confidence Scores
+
+Each frame receives a confidence score between 0.0 and 1.0:
+
+- **0.5+**: Frame is likely REAL
+- **Below 0.5**: Frame is likely FAKE
+- **Above 0.8**: High confidence in authenticity
+- **Below 0.2**: High confidence it's manipulated
+
+<Warning>
+Confidence scores represent the model's certainty, not absolute truth. Always review frame details for context.
+</Warning>
+
+## Database Schema
+
+Analysis results are stored in the Post model:
+
+```javascript
+// backend/models/Post.js:46-67
+analysis_status: {
+  type: String,
+  enum: ['none', 'processing', 'completed', 'failed'],
+  default: 'none'
+},
+deepfake_analysis: {
+  is_fake: Boolean,
+  confidence: Number,
+  frames_analysis: [{
+    frame: String,
+    confidence: Number,
+    is_fake: Boolean,
+    frame_path: String
+  }],
+  summary: {
+    status: String,  // "REAL" or "FAKE"
+    confidence_percentage: Number,
+    total_frames: Number,
+    real_frames: Number,
+    fake_frames: Number
+  }
+}
+```
+
+## User Interface
+
+### Upload Flow
+
+1. **Navigate to Create Post** - Users click "Create Post" in the navigation
+2. **Fill Form** - Enter title, content, and select video file
+3. **Upload** - System validates file type and size (max 100MB)
+4. **Auto-Processing** - Video posts automatically start analysis
+
+<Tip>
+Users see a processing indicator immediately after upload. They can navigate away and return later to view results.
+</Tip>
+
+### Viewing Results
+
+After analysis completes, users see:
+
+<CardGroup cols={2}>
+  <Card title="Summary Badge" icon="chart-simple">
+    - Status (REAL/FAKE) in color-coded text
+    - Overall confidence percentage
+    - Total frames analyzed
+  </Card>
+  
+  <Card title="Frame Preview" icon="images">
+    - Grid of first 3 analyzed frames
+    - Click to view full analysis
+    - Frame-by-frame confidence scores
+  </Card>
+  
+  <Card title="Detailed Analysis" icon="magnifying-glass-chart">
+    - Complete list of all frames
+    - Individual confidence scores
+    - Real vs. Fake classification per frame
+  </Card>
+  
+  <Card title="Video Player" icon="circle-play">
+    - Original uploaded video
+    - Standard playback controls
+    - Full quality viewing
+  </Card>
+</CardGroup>
+
+## API Endpoints
+
+### Analyze Video
+
+```bash
+POST /api/posts/:postId
+```
+
+Initiates deepfake detection for a video post.
+
+**Parameters**:
+- `postId` (path): MongoDB ObjectId of the post
+
+**Response**:
+```json
+{
+  "frames_analysis": [
+    {
+      "frame": "frame0.jpg",
+      "frame_path": "/uploads/frames/frames_video123/frame0.jpg",
+      "confidence": 0.87,
+      "is_fake": false
+    }
+  ],
+  "confidence": 0.82,
+  "is_fake": false,
+  "total_frames": 15,
+  "fake_frames_count": 3,
+  "real_frames_count": 12
+}
+```
+
+<Note>
+The analysis runs asynchronously. The post's `analysis_status` field updates as processing progresses.
+</Note>
+
+## Performance Considerations
+
+<Accordion title="Processing Time">
+  - **Short videos** (< 30 seconds): 10-15 seconds
+  - **Medium videos** (30-60 seconds): 20-30 seconds
+  - **Long videos** (> 60 seconds): 30-60 seconds
+  
+  Processing time depends on video length and frame count.
+</Accordion>
+
+<Accordion title="Frame Sampling">
+  The system samples every 20th frame to balance accuracy and performance. This provides sufficient coverage while keeping processing time reasonable.
+  
+  For a 30 FPS video:
+  - 30-second video: ~45 frames analyzed
+  - 60-second video: ~90 frames analyzed
+</Accordion>
+
+<Accordion title="Resource Usage">
+  Each analysis request:
+  - Creates temporary frame files on disk
+  - Loads frames into GPU memory for inference
+  - Stores results in MongoDB
+  
+  Files are automatically cleaned up after analysis.
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Models" icon="brain" href="/features/ai-models">
+    Learn about the ViT and CNN+LSTM models powering detection
+  </Card>
+  
+  <Card title="Frame Analysis" icon="film" href="/features/frame-analysis">
+    Deep dive into frame-by-frame video analysis
+  </Card>
+</CardGroup>

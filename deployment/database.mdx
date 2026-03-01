@@ -1,0 +1,301 @@
+---
+title: Database Configuration
+description: MongoDB setup, connection configuration, and database schemas for IPD
+---
+
+The IPD application uses MongoDB as its primary database, with Mongoose as the ODM (Object Data Modeling) library.
+
+## Database Connection
+
+The database connection is configured in `backend/db.js`:
+
+```javascript backend/db.js:6-11
+mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+})
+.then(() => console.log("Successfully connected to DB"))
+.catch((error) => console.error("Error connecting to DB:", error));
+```
+
+### Connection Options
+
+- **useNewUrlParser**: Uses the new MongoDB connection string parser
+- **useUnifiedTopology**: Uses the new MongoDB topology engine for better reliability and performance
+
+## Database Schemas
+
+IPD uses three main Mongoose schemas to organize data:
+
+### User Schema
+
+Stores user account information and authentication credentials.
+
+```javascript backend/db.js:14-39
+const userSchema = new mongoose.Schema({
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true,
+        lowercase: true,
+    },
+    password: {
+        type: String,
+        required: true,
+        minLength: 6,
+    },
+    firstName: {
+        type: String,
+        required: true,
+        trim: true,
+        maxLength: 50,
+    },
+    lastName: {
+        type: String,
+        required: true,
+        trim: true,
+        maxLength: 50,
+    },
+}, { timestamps: true });
+```
+
+<ParamField path="username" type="string" required>
+  User email address (used as username). Must be unique, automatically converted to lowercase and trimmed.
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  User password. Minimum length of 6 characters. 
+  
+  <Warning>Passwords should be hashed before storage in production.</Warning>
+</ParamField>
+
+<ParamField path="firstName" type="string" required>
+  User's first name. Maximum 50 characters, automatically trimmed.
+</ParamField>
+
+<ParamField path="lastName" type="string" required>
+  User's last name. Maximum 50 characters, automatically trimmed.
+</ParamField>
+
+<ParamField path="timestamps" type="boolean" default="true">
+  Automatically adds `createdAt` and `updatedAt` fields.
+</ParamField>
+
+### Post Schema
+
+Stores social media posts with media content and deepfake analysis results.
+
+```javascript backend/models/Post.js:3-72
+const postSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true },
+  content: { type: String, required: true },
+  media_url: { type: String, required: true },
+  media_type: { type: String, enum: ['image', 'video'], required: true },
+  creator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  comments: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    content: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  analysis_status: {
+    type: String,
+    enum: ['none', 'processing', 'completed', 'failed'],
+    default: 'none'
+  },
+  deepfake_analysis: {
+    is_fake: Boolean,
+    confidence: Number,
+    frames_analysis: [{
+      frame: String,
+      confidence: Number,
+      is_fake: Boolean,
+      frame_path: String
+    }],
+    summary: {
+      status: String,  // "REAL" or "FAKE"
+      confidence_percentage: Number,
+      total_frames: Number,
+      real_frames: Number,
+      fake_frames: Number
+    }
+  }
+}, { timestamps: true });
+```
+
+**Key Fields:**
+
+<ParamField path="media_type" type="enum">
+  Type of media attached to the post. Must be either `'image'` or `'video'`.
+</ParamField>
+
+<ParamField path="analysis_status" type="enum">
+  Current status of deepfake analysis:
+  - `none`: No analysis performed (images)
+  - `processing`: Video analysis in progress
+  - `completed`: Analysis finished successfully
+  - `failed`: Analysis encountered an error
+</ParamField>
+
+<ParamField path="deepfake_analysis" type="object">
+  Contains the complete deepfake detection results including per-frame analysis and summary statistics.
+</ParamField>
+
+### Old Model Analysis Schema
+
+Stores alternative model analysis results for comparison purposes.
+
+```javascript backend/models/OldModelAnalysis.js:3-24
+const oldModelAnalysisSchema = new mongoose.Schema({
+  post_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Post',
+    required: true
+  },
+  is_fake: Boolean,
+  confidence: Number,
+  frames_analysis: [{
+    frame: String,
+    confidence: Number,
+    is_fake: Boolean,
+    frame_path: String
+  }],
+  summary: {
+    status: String,
+    confidence_percentage: Number,
+    total_frames: Number,
+    real_frames: Number,
+    fake_frames: Number
+  }
+}, { timestamps: true });
+```
+
+## Setup Instructions
+
+<Steps>
+  <Step title="Install MongoDB">
+    Install MongoDB locally or use MongoDB Atlas for cloud hosting.
+    
+    **Local Installation:**
+    ```bash
+    # macOS (using Homebrew)
+    brew tap mongodb/brew
+    brew install mongodb-community
+    brew services start mongodb-community
+    
+    # Ubuntu/Debian
+    sudo apt-get install mongodb
+    sudo systemctl start mongodb
+    ```
+    
+    **MongoDB Atlas:**
+    1. Create account at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+    2. Create a new cluster
+    3. Get connection string from "Connect" button
+  </Step>
+  
+  <Step title="Configure connection string">
+    Set the `MONGO_URI` environment variable in your `.env` file:
+    
+    ```bash .env
+    # Local MongoDB
+    MONGO_URI=mongodb://localhost:27017/ipd
+    
+    # MongoDB Atlas
+    MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/ipd?retryWrites=true&w=majority
+    ```
+  </Step>
+  
+  <Step title="Verify connection">
+    Start the backend server and check for successful connection:
+    
+    ```bash
+    cd backend
+    npm start
+    ```
+    
+    Expected output:
+    ```
+    Successfully connected to DB
+    Server is running on port 3000
+    ```
+  </Step>
+</Steps>
+
+## Database Operations
+
+The application performs standard CRUD operations:
+
+### User Operations
+
+```javascript
+// Create user (signup)
+const user = await User.create({
+    username: req.body.username,
+    password: req.body.password,
+    firstName: req.body.firstName,
+    lastName: req.body.lastName,
+});
+
+// Find user (signin)
+const user = await User.findOne({
+    username: req.body.username,
+    password: req.body.password
+});
+```
+
+### Post Operations
+
+```javascript
+// Get all posts with populated creator and comments
+const posts = await Post.find()
+  .populate('creator', 'username')
+  .populate('comments.user', 'username')
+  .sort('-createdAt');
+
+// Update post with analysis results
+const updatedPost = await Post.findByIdAndUpdate(
+  postId,
+  { $set: { deepfake_analysis: analysisData, analysis_status: 'completed' } },
+  { new: true }
+);
+```
+
+## Production Best Practices
+
+<Warning>
+  **Security Considerations:**
+  - Enable MongoDB authentication
+  - Use SSL/TLS for connections
+  - Implement IP whitelisting
+  - Hash passwords before storage (implement bcrypt)
+  - Regular database backups
+</Warning>
+
+<Info>
+  **Performance Optimization:**
+  - Create indexes on frequently queried fields (username, creator, post_id)
+  - Use connection pooling
+  - Monitor query performance
+  - Implement database query limits and pagination
+</Info>
+
+## Troubleshooting
+
+### Connection Errors
+
+If you see connection errors:
+
+1. **"Error connecting to DB: MongoNetworkError"**
+   - Verify MongoDB is running: `mongosh` or `mongo`
+   - Check connection string format
+   - Verify network connectivity
+
+2. **"Authentication failed"**
+   - Verify username and password in connection string
+   - Check database user permissions
+
+3. **"Connection timeout"**
+   - Check firewall settings
+   - Verify MongoDB Atlas IP whitelist

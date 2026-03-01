@@ -1,0 +1,338 @@
+---
+title: "Vision Transformer (ViT) Model"
+description: "Technical details of IPD's PyTorch-based Vision Transformer model"
+---
+
+## Overview
+
+The **Vision Transformer (ViT)** model is IPD's primary deepfake detection model, achieving **83.7% accuracy** on test data. It runs on port 5000 and uses a transformer-based architecture to analyze image patches.
+
+<Info>
+**Model Location**: `backend/flask_server_2/app.py`  
+**Framework**: PyTorch with `vit-pytorch` library  
+**Port**: 5000  
+**Accuracy**: 83.7%
+</Info>
+
+## Model Architecture
+
+The ViT model is configured with the following parameters:
+
+```python
+model = ViT(
+    image_size=224,      # Input image size
+    patch_size=32,       # Size of each image patch
+    num_classes=1,       # Binary classification (fake/real)
+    dim=1024,            # Token/patch embedding dimension
+    depth=6,             # Number of transformer blocks
+    heads=16,            # Number of attention heads
+    mlp_dim=2048,        # MLP (feed-forward) dimension
+    dropout=0.1,         # Dropout rate
+    emb_dropout=0.1      # Embedding dropout rate
+)
+```
+
+<Accordion title="Parameter Breakdown">
+- **image_size (224)**: Input images are resized to 224x224 pixels
+- **patch_size (32)**: Each image is divided into 32x32 pixel patches, creating a 7x7 grid (49 patches)
+- **num_classes (1)**: Single output neuron for binary classification using sigmoid activation
+- **dim (1024)**: Each patch is embedded into a 1024-dimensional vector
+- **depth (6)**: The model has 6 transformer encoder layers
+- **heads (16)**: Multi-head attention with 16 parallel attention mechanisms
+- **mlp_dim (2048)**: Feed-forward network has 2048 hidden units
+- **dropout (0.1)**: 10% dropout for regularization
+</Accordion>
+
+## How It Works
+
+<Steps>
+  <Step title="Image Patching">
+    Input image (224x224) is divided into 49 patches of 32x32 pixels each
+  </Step>
+  <Step title="Patch Embedding">
+    Each patch is flattened and linearly projected into a 1024-dimensional embedding
+  </Step>
+  <Step title="Position Encoding">
+    Positional information is added to preserve spatial relationships between patches
+  </Step>
+  <Step title="Transformer Encoding">
+    6 transformer blocks process the patch embeddings with multi-head self-attention
+  </Step>
+  <Step title="Classification">
+    Final output is passed through sigmoid activation to produce confidence score
+  </Step>
+</Steps>
+
+## Preprocessing Pipeline
+
+Frames undergo several preprocessing steps before model inference:
+
+```python
+preprocess = transforms.Compose([
+    transforms.Resize(256),           # Resize to 256x256
+    transforms.CenterCrop(224),       # Center crop to 224x224
+    transforms.ToTensor(),            # Convert to tensor
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],   # ImageNet mean
+        std=[0.229, 0.224, 0.225]     # ImageNet std
+    )
+])
+```
+
+<Tabs>
+  <Tab title="Step 1: Resize">
+    **Resize to 256x256**
+    
+    Initial resize maintains aspect ratio while preparing for center crop.
+  </Tab>
+  <Tab title="Step 2: Center Crop">
+    **Center Crop to 224x224**
+    
+    Extracts the central 224x224 region, focusing on the main subject and removing edge artifacts.
+  </Tab>
+  <Tab title="Step 3: Normalization">
+    **ImageNet Normalization**
+    
+    Normalizes using ImageNet statistics:
+    - Mean: `[0.485, 0.456, 0.406]` (RGB)
+    - Std: `[0.229, 0.224, 0.225]` (RGB)
+    
+    This is standard for models pretrained on ImageNet.
+  </Tab>
+</Tabs>
+
+## Inference Process
+
+The model analyzes frames using the following process:
+
+```python
+def analyze_frame(frame_path, threshold=0.5):
+    # Read and preprocess frame
+    frame = cv2.imread(frame_path)
+    processed_frame = preprocess_frame(frame)
+    
+    # Get prediction
+    with torch.no_grad():
+        output = model(processed_frame.unsqueeze(0))
+        confidence = float(torch.sigmoid(output).cpu().numpy()[0][0])
+        is_fake = confidence < threshold
+        
+    return confidence, is_fake
+```
+
+<Accordion title="Code Breakdown">
+1. **Frame Loading**: Loads frame using OpenCV (BGR format)
+2. **Preprocessing**: Converts BGR→RGB, applies transformations
+3. **Batch Dimension**: `unsqueeze(0)` adds batch dimension [1, 3, 224, 224]
+4. **Forward Pass**: Model outputs raw logit value
+5. **Sigmoid Activation**: Converts logit to probability [0, 1]
+6. **Threshold**: Compares against 0.5 to determine fake/real
+</Accordion>
+
+## Model Weights
+
+The trained model weights are stored at:
+
+```
+backend/flask_server_2/models/as_model_0.837.pt
+```
+
+<Note>
+The filename `as_model_0.837.pt` indicates the model achieved **83.7% accuracy** during training validation.
+</Note>
+
+## Confidence Scoring
+
+The model outputs a confidence score between 0.0 and 1.0:
+
+<Tabs>
+  <Tab title="Real Content">
+    **Confidence ≥ 0.5**
+    
+    Higher values (closer to 1.0) indicate greater confidence that the frame is **authentic/real**.
+    
+    Examples:
+    - `0.95` - Very likely real
+    - `0.75` - Probably real
+    - `0.51` - Slightly leaning real
+  </Tab>
+  <Tab title="Fake Content">
+    **Confidence < 0.5**
+    
+    Lower values (closer to 0.0) indicate greater confidence that the frame is **fake/manipulated**.
+    
+    Examples:
+    - `0.05` - Very likely fake
+    - `0.25` - Probably fake
+    - `0.49` - Slightly leaning fake
+  </Tab>
+</Tabs>
+
+## Frame Extraction
+
+The ViT model processes **every 20th frame** from uploaded videos:
+
+```python
+frames_num = 20  # Save every 20th frame
+if count % frames_num == 0:
+    frame_path = os.path.join(frames_dir, f"frame{count}.jpg")
+    cv2.imwrite(frame_path, image)
+```
+
+<Info>
+**Why every 20th frame?**
+
+For a 30 FPS video:
+- Every 20th frame = ~0.67 seconds between samples
+- 10 second video → ~15 frames analyzed
+- 60 second video → ~90 frames analyzed
+
+This provides sufficient temporal coverage while maintaining reasonable processing time.
+</Info>
+
+## Overall Video Verdict
+
+The final video classification uses majority voting:
+
+```python
+# Count fake vs real frames
+fake_frames = sum(1 for frame in frames_analysis if frame['is_fake'])
+real_frames = num_frames - fake_frames
+
+# Majority vote determines verdict
+is_fake = fake_frames > real_frames
+
+# Calculate average confidence
+average_confidence = total_confidence / num_frames
+```
+
+<Accordion title="Example Calculation">
+For a video with 20 analyzed frames:
+
+| Metric | Value |
+|--------|-------|
+| Total frames analyzed | 20 |
+| Frames classified as fake | 13 |
+| Frames classified as real | 7 |
+| **Final verdict** | **FAKE** (13 > 7) |
+| Average confidence | 0.42 |
+
+Since 13 frames (65%) were classified as fake, the overall video is marked as fake.
+</Accordion>
+
+## API Endpoint
+
+The ViT model is accessible via the `/analyze` endpoint:
+
+```bash
+curl -X POST http://localhost:5000/analyze \
+  -F "video=@path/to/video.mp4"
+```
+
+**Response Structure:**
+
+```json
+{
+  "frames_analysis": [
+    {
+      "frame": "frame0.jpg",
+      "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+      "confidence": 0.73,
+      "is_fake": false
+    }
+  ],
+  "confidence": 0.68,
+  "is_fake": false,
+  "total_frames": 15,
+  "fake_frames_count": 6,
+  "real_frames_count": 9
+}
+```
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="High Accuracy" icon="bullseye">
+    83.7% accuracy on validation data
+  </Card>
+  <Card title="Self-Attention" icon="eye">
+    Captures long-range dependencies between image regions
+  </Card>
+  <Card title="Patch-Based" icon="grid">
+    Analyzes local and global features simultaneously
+  </Card>
+  <Card title="Transfer Learning" icon="arrows-rotate">
+    Benefits from ImageNet pretraining knowledge
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+- **Computational Cost**: Transformer models require more memory than CNNs
+- **GPU Recommended**: Best performance with CUDA-enabled GPU
+- **Fixed Input Size**: Images must be 224x224 (handled by preprocessing)
+- **No Temporal Context**: Analyzes frames independently without considering temporal patterns
+</Warning>
+
+## Technical Requirements
+
+```python
+# Required dependencies
+import torch
+from vit_pytorch import ViT
+import cv2
+from torchvision import transforms
+from PIL import Image
+```
+
+**Installation:**
+
+```bash
+pip install torch torchvision vit-pytorch opencv-python pillow
+```
+
+## Performance Optimization
+
+<Tabs>
+  <Tab title="CPU Mode">
+    ```python
+    model.load_state_dict(
+        torch.load(weights_path, map_location=torch.device('cpu'))
+    )
+    ```
+    Uses CPU for inference (slower but more compatible)
+  </Tab>
+  <Tab title="GPU Mode">
+    ```python
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    ```
+    Leverages GPU acceleration for faster processing
+  </Tab>
+  <Tab title="Batch Processing">
+    ```python
+    # Process multiple frames at once
+    batch = torch.stack([preprocess(frame) for frame in frames])
+    outputs = model(batch)
+    ```
+    Increases throughput by processing multiple frames simultaneously
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CNN+LSTM Model" icon="network-wired" href="/models/cnn-lstm">
+    Learn about the temporal analysis model
+  </Card>
+  <Card title="Model Comparison" icon="chart-line" href="/models/comparison">
+    Compare ViT vs CNN+LSTM performance
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/posts/create">
+    Integrate the ViT model into your application
+  </Card>
+  <Card title="Deployment Guide" icon="server" href="/deployment/backend-setup">
+    Deploy the ViT model server
+  </Card>
+</CardGroup>

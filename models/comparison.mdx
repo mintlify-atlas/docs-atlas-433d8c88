@@ -1,0 +1,514 @@
+---
+title: "Model Comparison"
+description: "Side-by-side comparison of ViT and CNN+LSTM deepfake detection models"
+---
+
+## Overview
+
+IPD's dual-model architecture provides complementary strengths for deepfake detection. This page compares the **Vision Transformer (ViT)** and **CNN+LSTM** models across multiple dimensions.
+
+<Info>
+Both models analyze the **same extracted frames** to enable direct comparison of their detection capabilities.
+</Info>
+
+## Quick Comparison
+
+<CardGroup cols={2}>
+  <Card title="Vision Transformer (ViT)" icon="brain">
+    **Best For**: High-accuracy image analysis
+    
+    - Port: 5000
+    - Accuracy: 83.7%
+    - Framework: PyTorch
+    - Architecture: Transformer-based
+  </Card>
+  <Card title="CNN+LSTM" icon="network-wired">
+    **Best For**: Temporal pattern detection
+    
+    - Port: 5001
+    - Accuracy: Not documented
+    - Framework: TensorFlow/Keras
+    - Architecture: Hybrid CNN+LSTM
+  </Card>
+</CardGroup>
+
+## Technical Specifications
+
+### Architecture Details
+
+| Feature | ViT Model | CNN+LSTM Model |
+|---------|-----------|----------------|
+| **Framework** | PyTorch | TensorFlow/Keras |
+| **Architecture Type** | Transformer | Hybrid CNN+LSTM |
+| **Input Size** | 224x224x3 | 224x224x3 |
+| **Patch Size** | 32x32 | N/A |
+| **Number of Patches** | 49 (7x7 grid) | N/A |
+| **Embedding Dimension** | 1024 | Unknown |
+| **Transformer Depth** | 6 layers | N/A |
+| **Attention Heads** | 16 | N/A |
+| **MLP Dimension** | 2048 | Unknown |
+| **Dropout Rate** | 0.1 | Unknown |
+| **Output Classes** | 1 (binary) | 1 (binary) |
+
+### Preprocessing Comparison
+
+<Tabs>
+  <Tab title="ViT Model">
+    ```python
+    # PyTorch transforms
+    transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],  # ImageNet
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+    ```
+    
+    **Characteristics:**
+    - Resize → Center crop workflow
+    - ImageNet normalization (transfer learning)
+    - Values scaled with mean/std
+    - BGR → RGB conversion (OpenCV → PIL)
+  </Tab>
+  <Tab title="CNN+LSTM Model">
+    ```python
+    # Keras preprocessing
+    img = image.load_img(frame_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0  # Normalize to [0, 1]
+    ```
+    
+    **Characteristics:**
+    - Direct resize to 224x224
+    - Simple [0, 1] normalization
+    - No mean/std standardization
+    - Native RGB format
+  </Tab>
+</Tabs>
+
+<Note>
+The different preprocessing approaches mean the models "see" slightly different representations of the same frame, which can lead to different predictions.
+</Note>
+
+## Model Files & Loading
+
+### ViT Model
+
+```python
+# Model file location
+weights_path = 'models/as_model_0.837.pt'
+
+# Loading process
+model = ViT(
+    image_size=224, patch_size=32, num_classes=1,
+    dim=1024, depth=6, heads=16, mlp_dim=2048,
+    dropout=0.1, emb_dropout=0.1
+)
+model.load_state_dict(torch.load(weights_path, map_location='cpu'))
+model.eval()
+```
+
+<Accordion title="ViT Loading Details">
+- **File Format**: `.pt` (PyTorch state dictionary)
+- **Size**: Contains only weights, not architecture
+- **Architecture**: Must be defined in code before loading
+- **Accuracy**: 83.7% (indicated in filename)
+- **Evaluation Mode**: `model.eval()` disables dropout
+</Accordion>
+
+### CNN+LSTM Model
+
+```python
+# Model file location
+model_path = 'models/deepfake_detection_model.h5'
+
+# Loading process
+model = tf.keras.models.load_model(model_path, compile=False)
+```
+
+<Accordion title="CNN+LSTM Loading Details">
+- **File Format**: `.h5` (Keras HDF5)
+- **Size**: Contains both architecture and weights
+- **Architecture**: Automatically loaded from file
+- **Accuracy**: Not documented in filename
+- **Compilation**: Skipped (`compile=False`) for inference-only
+</Accordion>
+
+## Inference Speed & Performance
+
+### Processing Pipeline
+
+Both models follow the same high-level pipeline but differ in implementation:
+
+<Steps>
+  <Step title="Frame Extraction">
+    **Both Models**: Extract every 20th frame using OpenCV
+    
+    ```python
+    frames_num = 20  # Save every 20th frame
+    ```
+  </Step>
+  <Step title="Preprocessing">
+    **ViT**: PyTorch transforms with ImageNet normalization  
+    **CNN+LSTM**: Keras preprocessing with simple scaling
+  </Step>
+  <Step title="Model Inference">
+    **ViT**: Transformer forward pass with multi-head attention  
+    **CNN+LSTM**: CNN feature extraction + LSTM temporal analysis
+  </Step>
+  <Step title="Post-processing">
+    **ViT**: Sigmoid activation on raw logits  
+    **CNN+LSTM**: Direct output (sigmoid likely in final layer)
+  </Step>
+</Steps>
+
+### Computational Requirements
+
+<Tabs>
+  <Tab title="ViT Model">
+    **Resource Intensity**: High
+    
+    - **Memory**: ~200MB model size
+    - **VRAM**: Recommended for GPU usage
+    - **CPU**: Can run but slower
+    - **Batch Processing**: Benefits significantly
+    - **Attention Complexity**: O(n²) where n = number of patches
+  </Tab>
+  <Tab title="CNN+LSTM Model">
+    **Resource Intensity**: Moderate
+    
+    - **Memory**: Varies (model size unknown)
+    - **VRAM**: Optional
+    - **CPU**: Efficient on CPU
+    - **Batch Processing**: Moderate benefit
+    - **Convolution Complexity**: O(k²·n) where k = kernel size
+  </Tab>
+</Tabs>
+
+## Confidence Scoring Comparison
+
+Both models use identical threshold logic:
+
+```python
+# Common threshold across both models
+threshold = 0.5
+is_fake = confidence < threshold
+```
+
+### Confidence Interpretation
+
+<Tabs>
+  <Tab title="High Confidence (> 0.7)">
+    **Strong Detection**
+    
+    Both models agree on classification when confidence is high:
+    
+    - **0.9+**: Very strong real signal
+    - **0.7-0.9**: Strong real signal
+    - **0.0-0.3**: Strong fake signal
+    - **< 0.1**: Very strong fake signal
+  </Tab>
+  <Tab title="Moderate Confidence (0.5-0.7)">
+    **Leaning Real**
+    
+    Models may disagree in this range:
+    
+    - **0.6-0.7**: Probably real (some uncertainty)
+    - **0.5-0.6**: Slightly leaning real
+    
+    Consider both model outputs when confidence is moderate.
+  </Tab>
+  <Tab title="Moderate Confidence (0.3-0.5)">
+    **Leaning Fake**
+    
+    Models may disagree in this range:
+    
+    - **0.4-0.5**: Slightly leaning fake
+    - **0.3-0.4**: Probably fake (some uncertainty)
+    
+    Cross-reference with other model for validation.
+  </Tab>
+</Tabs>
+
+## Verdict Calculation
+
+Both models use **majority voting** for overall video classification:
+
+```python
+# Count fake vs real frames
+fake_frames = sum(1 for frame in frames_analysis if frame['is_fake'])
+real_frames = num_frames - fake_frames
+
+# Majority vote
+is_fake = fake_frames > real_frames
+
+# Average confidence
+average_confidence = total_confidence / num_frames
+```
+
+<Info>
+A video is classified as **fake** if more than 50% of analyzed frames are detected as fake.
+</Info>
+
+### Example Comparison
+
+Consider a video with 20 analyzed frames:
+
+| Metric | ViT Model | CNN+LSTM Model |
+|--------|-----------|----------------|
+| Frames classified as fake | 13 | 11 |
+| Frames classified as real | 7 | 9 |
+| **Verdict** | **FAKE** | **FAKE** |
+| Average confidence | 0.42 | 0.48 |
+| Agreement | ✅ Both detect fake | ✅ Both detect fake |
+
+Both models agree the video is fake, with ViT showing stronger conviction (lower confidence).
+
+## API Endpoints
+
+### ViT Model Endpoints
+
+<CodeGroup>
+```bash Full Analysis
+curl -X POST http://localhost:5000/analyze \
+  -F "video=@video.mp4"
+```
+
+```bash Frame Extraction Only
+curl -X POST http://localhost:5000/extract-frames \
+  -H "Content-Type: application/json" \
+  -d '{"video_path": "uploads/video.mp4", "frames_dir": "frames_video"}'
+```
+</CodeGroup>
+
+### CNN+LSTM Model Endpoints
+
+<CodeGroup>
+```bash Full Analysis
+curl -X POST http://localhost:5001/analyze \
+  -F "video=@video.mp4"
+```
+
+```bash Analyze Pre-Extracted Frames
+curl -X POST http://localhost:5001/analyze-frames \
+  -H "Content-Type: application/json" \
+  -d '{"frames_dir": "frames_video"}'
+```
+</CodeGroup>
+
+<Note>
+The `/analyze-frames` endpoint allows CNN+LSTM to analyze frames already extracted by the ViT server, avoiding duplicate processing.
+</Note>
+
+## Response Format Differences
+
+### ViT Model Response
+
+```json
+{
+  "frames_analysis": [
+    {
+      "frame": "frame0.jpg",
+      "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+      "confidence": 0.73,
+      "is_fake": false
+    }
+  ],
+  "confidence": 0.68,
+  "is_fake": false,
+  "total_frames": 15,
+  "fake_frames_count": 6,
+  "real_frames_count": 9
+}
+```
+
+### CNN+LSTM Model Response
+
+```json
+{
+  "frames_analysis": [
+    {
+      "frame": "frame0.jpg",
+      "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+      "confidence": 0.71,
+      "is_fake": false
+    }
+  ],
+  "confidence": 0.65,
+  "is_fake": false,
+  "total_frames": 15,
+  "analysis_errors": 0,
+  "fake_frames_count": 7,
+  "real_frames_count": 8
+}
+```
+
+<Warning>
+The CNN+LSTM response includes an additional `analysis_errors` field that tracks failed frame analyses.
+</Warning>
+
+## Strengths & Weaknesses
+
+### Vision Transformer (ViT)
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="circle-check">
+    - **Documented accuracy**: 83.7%
+    - **Self-attention**: Captures global context
+    - **Transfer learning**: ImageNet pretraining
+    - **Patch-based**: Analyzes spatial relationships
+  </Card>
+  <Card title="Weaknesses" icon="circle-xmark">
+    - **Computational cost**: Higher memory usage
+    - **GPU preference**: Best with CUDA
+    - **No temporal context**: Frames analyzed independently
+    - **Complex architecture**: More parameters to tune
+  </Card>
+</CardGroup>
+
+### CNN+LSTM
+
+<CardGroup cols={2}>
+  <Card title="Strengths" icon="circle-check">
+    - **Temporal analysis**: LSTM layers for sequences
+    - **CPU efficient**: Runs well without GPU
+    - **Frame reuse**: Can analyze pre-extracted frames
+    - **TensorFlow ecosystem**: Easy deployment
+  </Card>
+  <Card title="Weaknesses" icon="circle-xmark">
+    - **Unknown accuracy**: Not documented
+    - **Black box**: Architecture hidden in .h5
+    - **Frame independence**: Current implementation doesn't use LSTM fully
+    - **Error tracking**: May skip problematic frames
+  </Card>
+</CardGroup>
+
+## When to Use Each Model
+
+<Tabs>
+  <Tab title="Use ViT Model">
+    **Recommended Scenarios:**
+    
+    - High accuracy is critical
+    - You have GPU resources available
+    - Processing individual images (not videos)
+    - Working with high-quality source material
+    - Need documented performance metrics
+    - Transfer learning from ImageNet is beneficial
+  </Tab>
+  <Tab title="Use CNN+LSTM Model">
+    **Recommended Scenarios:**
+    
+    - CPU-only environment
+    - Temporal patterns are important
+    - Processing long videos efficiently
+    - Need TensorFlow/Keras ecosystem
+    - Deploying to edge devices
+    - Want to reuse frames from other analyses
+  </Tab>
+  <Tab title="Use Both Models">
+    **Recommended Scenarios:**
+    
+    - Maximum accuracy is required
+    - Need consensus validation
+    - Handling edge cases
+    - Building a production system
+    - Research and comparison purposes
+    - Detecting sophisticated deepfakes
+    
+    **Implementation:**
+    ```python
+    vit_result = requests.post('http://localhost:5000/analyze', files=video)
+    cnn_result = requests.post('http://localhost:5001/analyze', files=video)
+    
+    # Consensus approach
+    if vit_result['is_fake'] and cnn_result['is_fake']:
+        verdict = 'Definitely fake'
+    elif not vit_result['is_fake'] and not cnn_result['is_fake']:
+        verdict = 'Definitely real'
+    else:
+        verdict = 'Uncertain - models disagree'
+    ```
+  </Tab>
+</Tabs>
+
+## Deployment Considerations
+
+### Port Configuration
+
+```python
+# ViT Model Server
+app.run(host='0.0.0.0', port=5000, debug=True)
+
+# CNN+LSTM Model Server  
+app.run(host='0.0.0.0', port=5001, debug=True)
+```
+
+<Info>
+Both servers can run **simultaneously** on different ports, allowing parallel analysis and result comparison.
+</Info>
+
+### Directory Structure
+
+```
+backend/
+├── flask_server_2/          # ViT Model Server
+│   ├── app.py
+│   ├── models/
+│   │   └── as_model_0.837.pt
+│   ├── uploads/
+│   └── frames/
+│
+└── flask_server/            # CNN+LSTM Model Server
+    ├── app.py
+    ├── models/
+    │   └── deepfake_detection_model.h5
+    ├── uploads/
+    └── frames/
+```
+
+<Note>
+The CNN+LSTM server can access frames from `../flask_server_2/frames/` for cross-model comparison without duplicate extraction.
+</Note>
+
+## Performance Recommendations
+
+<Steps>
+  <Step title="Initial Setup">
+    Deploy **both models** on separate ports for flexibility
+  </Step>
+  <Step title="Frame Extraction">
+    Use the **ViT server** to extract frames (port 5000)
+  </Step>
+  <Step title="Parallel Analysis">
+    Submit to both models simultaneously:
+    - ViT: Full `/analyze` endpoint
+    - CNN+LSTM: `/analyze-frames` with shared frames
+  </Step>
+  <Step title="Result Aggregation">
+    Compare confidence scores and verdicts:
+    - If both agree: High confidence in result
+    - If they disagree: Flag for manual review
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ViT Model Details" icon="brain" href="/models/vit-transformer">
+    Deep dive into Vision Transformer architecture
+  </Card>
+  <Card title="CNN+LSTM Details" icon="network-wired" href="/models/cnn-lstm">
+    Explore the hybrid temporal model
+  </Card>
+  <Card title="API Integration" icon="code" href="/api/posts/create">
+    Learn how to use both models via API
+  </Card>
+  <Card title="Deployment Guide" icon="server" href="/deployment/backend-setup">
+    Deploy both model servers
+  </Card>
+</CardGroup>

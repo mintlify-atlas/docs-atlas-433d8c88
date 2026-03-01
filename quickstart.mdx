@@ -1,80 +1,271 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with IPD in minutes. Create an account, upload a video, and analyze it for deepfakes.
 ---
 
-## Get started in three steps
+## Create your account
 
-Get your documentation site running locally and make your first customization.
+Start by creating a new account on IPD.
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Navigate to registration">
+    Visit the IPD platform and click on the registration page.
+  </Step>
+  
+  <Step title="Fill in your details">
+    Provide your email, first name, last name, and password.
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    <CodeGroup>
+    ```typescript Request body
+    {
+      "username": "user@example.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "password": "securepassword123"
+    }
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```typescript Response
+    {
+      "message": "User created successfully",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+    ```
+    </CodeGroup>
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Info>
+      Your password must be at least 6 characters long. The username field uses your email address.
+    </Info>
+  </Step>
+  
+  <Step title="Get authenticated">
+    After registration, you'll receive a JWT token that's automatically stored in `localStorage`. This token is used for all authenticated requests.
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Sign in to your account
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+If you already have an account, sign in with your credentials.
 
-### Step 3: Go live
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:3000/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "user@example.com",
+    "password": "securepassword123"
+  }'
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```typescript Axios
+import axios from 'axios';
+
+const response = await axios.post('http://localhost:3000/signin', {
+  username: 'user@example.com',
+  password: 'securepassword123'
+});
+
+const { token, user } = response.data;
+localStorage.setItem('token', token);
+```
+
+```json Response
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "username": "user@example.com",
+    "email": "user@example.com"
+  }
+}
+```
+</CodeGroup>
+
+## Upload your first video post
+
+Create a post with a video to analyze for deepfakes.
+
+<Steps>
+  <Step title="Prepare your video file">
+    Select a video file to upload. Supported formats include:
+    - MP4 (video/mp4)
+    - QuickTime (video/quicktime)
+    - AVI (video/x-msvideo)
+    
+    <Warning>
+      Video files are limited to 100MB. Larger files will be rejected.
+    </Warning>
+  </Step>
+  
+  <Step title="Create the post">
+    Upload your video with a title and description using a FormData request.
+    
+    <CodeGroup>
+    ```typescript Frontend API
+    const formData = new FormData();
+    formData.append('title', 'My first video post');
+    formData.append('content', 'Testing deepfake detection');
+    formData.append('video', videoFile);
+
+    const token = localStorage.getItem('token');
+    const response = await fetch('http://localhost:3000/api/posts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    });
+    ```
+    
+    ```bash cURL
+    curl -X POST http://localhost:3000/api/posts \
+      -H "Authorization: Bearer YOUR_TOKEN" \
+      -F "title=My first video post" \
+      -F "content=Testing deepfake detection" \
+      -F "video=@/path/to/video.mp4"
+    ```
+    
+    ```json Response
+    {
+      "_id": "65abc123def456789",
+      "title": "My first video post",
+      "content": "Testing deepfake detection",
+      "media_url": "/uploads/1234567890-123456789.mp4",
+      "media_type": "video",
+      "creator": "65abc123def456788",
+      "analysis_status": "processing"
+    }
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Automatic analysis begins">
+    When you upload a video, IPD automatically:
+    1. Saves the video to `backend/uploads/`
+    2. Extracts frames (every 20th frame)
+    3. Sends frames to the Flask ML server at `http://localhost:5000/analyze`
+    4. Analyzes each frame with the Vision Transformer model
+    5. Updates the post with analysis results
+    
+    The `analysis_status` field changes from `processing` to `completed` when done.
+  </Step>
+</Steps>
+
+## View analysis results
+
+Once analysis is complete, fetch the post to see deepfake detection results.
+
+<CodeGroup>
+```typescript API request
+const response = await fetch(
+  `http://localhost:3000/api/posts/${postId}`,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  }
+);
+
+const post = await response.json();
+console.log(post.deepfake_analysis);
+```
+
+```json Analysis result
+{
+  "id": "65abc123def456789",
+  "title": "My first video post",
+  "analysis_status": "completed",
+  "deepfake_analysis": {
+    "is_fake": false,
+    "confidence": 0.823,
+    "summary": {
+      "status": "REAL",
+      "confidence_percentage": 18,
+      "total_frames": 15,
+      "real_frames": 13,
+      "fake_frames": 2
+    },
+    "frames_analysis": [
+      {
+        "frame": "frame0.jpg",
+        "frame_path": "/uploads/frames/frames_1234567890/frame0.jpg",
+        "confidence": 0.854,
+        "is_fake": false
+      },
+      {
+        "frame": "frame20.jpg",
+        "frame_path": "/uploads/frames/frames_1234567890/frame20.jpg",
+        "confidence": 0.912,
+        "is_fake": false
+      }
+    ]
+  }
+}
+```
+</CodeGroup>
+
+## Understanding the results
+
+The deepfake analysis provides several key metrics:
+
+<ResponseField name="is_fake" type="boolean">
+  Overall determination: `true` if more than half of the frames are detected as fake, `false` otherwise.
+</ResponseField>
+
+<ResponseField name="confidence" type="number">
+  Average confidence score across all frames (0-1 range). Higher values indicate higher confidence that the content is real.
+</ResponseField>
+
+<ResponseField name="summary.status" type="string">
+  Human-readable status: either `REAL` or `FAKE` based on the frame analysis.
+</ResponseField>
+
+<ResponseField name="summary.confidence_percentage" type="number">
+  Percentage of frames detected as fake (0-100).
+</ResponseField>
+
+<ResponseField name="summary.total_frames" type="number">
+  Total number of frames extracted and analyzed from the video.
+</ResponseField>
+
+<ResponseField name="frames_analysis" type="array">
+  Detailed analysis for each individual frame, including frame path, confidence score, and fake/real determination.
+</ResponseField>
+
+<Tip>
+  For videos with mixed results (some fake frames, some real), examine the individual frame analysis to identify which portions of the video may be manipulated.
+</Tip>
+
+## Compare with the CNN+LSTM model
+
+IPD supports dual model analysis. You can run the same video through the CNN+LSTM model for comparison.
+
+```typescript Request
+const response = await fetch(
+  `http://localhost:3000/api/posts/analyze-old-model/${postId}`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  }
+);
+```
+
+The CNN+LSTM model (referred to as "old model" in the codebase at `backend/routes/post.js:357`) provides a second opinion using a different architectural approach. Comparing results from both models can increase confidence in the detection.
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Explore the community" icon="users" href="/guide/community">
+    View posts from other users, like, and comment on content.
+  </Card>
+  <Card title="Understand AI models" icon="brain" href="/models/overview">
+    Learn how the Vision Transformer and CNN+LSTM models work.
+  </Card>
+  <Card title="View detailed results" icon="chart-line" href="/guide/viewing-results">
+    Explore frame-by-frame analysis and visualization features.
+  </Card>
+  <Card title="API documentation" icon="code" href="/api/posts/create">
+    Explore the complete API reference for building integrations.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

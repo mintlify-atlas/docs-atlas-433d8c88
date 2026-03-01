@@ -1,0 +1,193 @@
+---
+title: 'Authentication'
+description: 'Learn how to sign up and sign in to the IPD platform'
+icon: 'key'
+---
+
+## Overview
+
+IPD uses a secure JWT-based authentication system. You'll need to create an account or sign in to create posts, analyze videos, and interact with the community.
+
+## Creating an Account
+
+<Steps>
+  <Step title="Navigate to the Sign Up Page">
+    Go to the registration page or click "Sign up here" from the login page.
+  </Step>
+  
+  <Step title="Fill in Your Details">
+    Provide the following information:
+    - **First Name**: Your first name
+    - **Last Name**: Your last name
+    - **Email Address**: A valid email address (used as your username)
+    - **Password**: Create a secure password
+    
+    <Note>
+      Your email address will be used as your username throughout the platform.
+    </Note>
+  </Step>
+  
+  <Step title="Submit Registration">
+    Click the **"Create Account"** button. The system will:
+    - Validate your input
+    - Check if the email is already registered
+    - Create your user account
+    - Generate a JWT authentication token
+    - Automatically log you in
+  </Step>
+  
+  <Step title="Redirected to Dashboard">
+    Upon successful registration, you'll be automatically redirected to your dashboard where you can start creating posts.
+  </Step>
+</Steps>
+
+### What You'll See
+
+<Tabs>
+  <Tab title="Success">
+    On successful registration:
+    - Your authentication token is stored in browser local storage
+    - Your user ID is saved for session management
+    - You're immediately redirected to the dashboard
+    - You can start creating and viewing posts
+  </Tab>
+  
+  <Tab title="Error">
+    If registration fails, you'll see an error message such as:
+    - "Email already taken / Incorrect inputs" - The email is already registered
+    - Form validation errors if required fields are missing
+    
+    <Warning>
+      If you see "Email already taken", try signing in instead or use a different email address.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Signing In
+
+<Steps>
+  <Step title="Navigate to Login Page">
+    Visit the login page at `/login` or click "Sign in here" from the registration page.
+  </Step>
+  
+  <Step title="Enter Credentials">
+    Provide your credentials:
+    - **Email Address**: The email you registered with
+    - **Password**: Your account password
+    
+    <Tip>
+      You can check "Remember me" to stay logged in on this device.
+    </Tip>
+  </Step>
+  
+  <Step title="Submit Login">
+    Click the **"Sign in"** button. The system will:
+    - Validate your credentials against the database
+    - Generate a fresh JWT token containing your userId, username, and email
+    - Store the token securely in local storage
+  </Step>
+  
+  <Step title="Access Your Dashboard">
+    On successful login, you'll be redirected to your dashboard and the page will reload to apply your authenticated session.
+  </Step>
+</Steps>
+
+### Authentication Response
+
+When you successfully sign in, the server returns:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "username": "user@example.com",
+    "email": "user@example.com"
+  }
+}
+```
+
+The token is automatically stored and included in all subsequent API requests via the `Authorization: Bearer <token>` header.
+
+## Session Management
+
+### How Authentication Works
+
+1. **Token Storage**: Your JWT token is stored in `localStorage` under the key `token`
+2. **User ID Storage**: Your user ID is extracted from the JWT and stored under the key `userId`
+3. **Automatic Authorization**: All protected API requests automatically include your token in the Authorization header
+
+### Protected Routes
+
+The following features require authentication:
+- Creating posts
+- Viewing post analysis
+- Liking posts
+- Commenting on posts
+- Accessing your dashboard
+- Analyzing videos with old model
+
+<Info>
+  If your token expires or is invalid, you'll be automatically redirected to the login page.
+</Info>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Can't Sign In">
+    If you're having trouble signing in:
+    - Verify your email and password are correct
+    - Check that you're using the email you registered with
+    - Ensure caps lock is off when typing your password
+    - Try refreshing the page and signing in again
+  </Accordion>
+  
+  <Accordion title="'Email Already Taken' Error">
+    This means an account already exists with this email:
+    - Use the "Sign in" option instead
+    - Or use a different email address to create a new account
+  </Accordion>
+  
+  <Accordion title="Automatically Logged Out">
+    If you're logged out unexpectedly:
+    - Your token may have expired
+    - Simply sign in again to continue
+    - Your data and posts are preserved
+  </Accordion>
+  
+  <Accordion title="401 Unauthorized Errors">
+    If you see 401 errors:
+    - Your authentication token is invalid or expired
+    - The system will automatically clear your token and redirect you to login
+    - Sign in again to get a fresh token
+  </Accordion>
+</AccordionGroup>
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="JWT Tokens" icon="shield">
+    Secure JSON Web Tokens encrypt your session data and are signed with a secret key.
+  </Card>
+  
+  <Card title="Password Security" icon="lock">
+    Passwords are validated and stored securely in the database.
+  </Card>
+  
+  <Card title="Email Validation" icon="envelope">
+    Email addresses are validated using Zod schema validation to ensure correct format.
+  </Card>
+  
+  <Card title="Session Persistence" icon="clock">
+    Your session persists across page reloads via localStorage token storage.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Once authenticated, you can:
+- [Create posts with images and videos](/guide/creating-posts)
+- [Analyze videos for deepfakes](/guide/analyzing-videos)
+- [Browse the community feed](/guide/community)
+- [View detailed analysis results](/guide/viewing-results)

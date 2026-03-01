@@ -1,0 +1,428 @@
+---
+title: "CNN+LSTM Model"
+description: "Technical details of IPD's TensorFlow-based hybrid CNN+LSTM model"
+---
+
+## Overview
+
+The **CNN+LSTM model** is IPD's secondary deepfake detection model that combines convolutional neural networks with temporal sequence analysis. It runs on port 5001 and provides an alternative detection approach to the ViT model.
+
+<Info>
+**Model Location**: `backend/flask_server/app.py`  
+**Framework**: TensorFlow/Keras  
+**Port**: 5001  
+**Architecture**: Hybrid CNN+LSTM
+</Info>
+
+## Model Architecture
+
+The model is a pretrained Keras model loaded from disk:
+
+```python
+model_path = 'models/deepfake_detection_model.h5'
+model = tf.keras.models.load_model(model_path, compile=False)
+```
+
+<Note>
+The actual CNN+LSTM architecture is defined in the trained `.h5` file. The model combines:
+- **CNN layers**: Extract spatial features from individual frames
+- **LSTM layers**: Capture temporal patterns across frame sequences
+</Note>
+
+## Preprocessing Pipeline
+
+Frames are preprocessed using Keras image utilities:
+
+```python
+# Load and resize image
+img = image.load_img(frame_path, target_size=(224, 224))
+
+# Convert to array
+img_array = image.img_to_array(img)
+
+# Add batch dimension
+img_array = np.expand_dims(img_array, axis=0)
+
+# Normalize to [0, 1]
+img_array /= 255.0
+```
+
+<Tabs>
+  <Tab title="Step 1: Load & Resize">
+    **Load and Resize to 224x224**
+    
+    Uses Keras `load_img` function to:
+    - Load image from disk
+    - Resize to exactly 224x224 pixels
+    - Maintain RGB color format
+  </Tab>
+  <Tab title="Step 2: Array Conversion">
+    **Convert PIL Image to NumPy Array**
+    
+    Transforms the PIL Image object into a NumPy array with shape `(224, 224, 3)`
+  </Tab>
+  <Tab title="Step 3: Batch Dimension">
+    **Add Batch Dimension**
+    
+    Expands dimensions from `(224, 224, 3)` to `(1, 224, 224, 3)` for model input
+  </Tab>
+  <Tab title="Step 4: Normalization">
+    **Normalize Pixel Values**
+    
+    Divides all pixel values by 255.0 to scale from `[0, 255]` to `[0, 1]`
+  </Tab>
+</Tabs>
+
+## Inference Process
+
+The model analyzes frames using this workflow:
+
+```python
+def analyze_frame(frame_path):
+    # Prepare image for model
+    img = image.load_img(frame_path, target_size=(224, 224))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array /= 255.0
+
+    # Get prediction
+    confidence = float(model.predict(img_array, verbose=0)[0][0])
+    
+    # Determine if fake
+    is_fake = confidence < 0.5
+    
+    # Validate confidence value
+    if np.isnan(confidence):
+        raise ValueError("Model returned NaN confidence")
+        
+    return confidence, is_fake
+```
+
+<Accordion title="Code Breakdown">
+1. **Image Loading**: Loads frame and resizes to 224x224
+2. **Preprocessing**: Converts to array, adds batch dimension, normalizes
+3. **Model Prediction**: Runs forward pass through CNN+LSTM layers
+4. **Confidence Extraction**: Extracts single float value from output
+5. **Threshold Application**: Compares against 0.5 threshold
+6. **Validation**: Checks for NaN values to ensure valid prediction
+</Accordion>
+
+## Confidence Scoring
+
+Identical to the ViT model, the CNN+LSTM model uses a 0.5 threshold:
+
+<Tabs>
+  <Tab title="Real Content">
+    **Confidence ≥ 0.5**
+    
+    Higher values indicate the frame is likely **authentic/real**.
+    
+    ```python
+    confidence = 0.73  # 73% confidence it's real
+    is_fake = False
+    ```
+  </Tab>
+  <Tab title="Fake Content">
+    **Confidence < 0.5**
+    
+    Lower values indicate the frame is likely **fake/manipulated**.
+    
+    ```python
+    confidence = 0.31  # 31% confidence it's real (69% fake)
+    is_fake = True
+    ```
+  </Tab>
+</Tabs>
+
+## Frame Extraction
+
+The CNN+LSTM model uses the same frame extraction strategy:
+
+```python
+frames_num = 20  # Save every 20th frame
+if count % frames_num == 0:
+    frame_path = os.path.join(frames_dir, f"frame{count}.jpg")
+    cv2.imwrite(frame_path, image)
+```
+
+<Info>
+Both models extract frames at the same rate (every 20th frame) to ensure consistent comparison between model results.
+</Info>
+
+## Dual-Endpoint Architecture
+
+The CNN+LSTM server provides two analysis endpoints:
+
+<Tabs>
+  <Tab title="/analyze">
+    **Full Video Analysis**
+    
+    Handles complete video upload, frame extraction, and analysis:
+    
+    ```bash
+    curl -X POST http://localhost:5001/analyze \
+      -F "video=@path/to/video.mp4"
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "frames_analysis": [...],
+      "confidence": 0.64,
+      "is_fake": false,
+      "total_frames": 20,
+      "analysis_errors": 0,
+      "fake_frames_count": 7,
+      "real_frames_count": 13
+    }
+    ```
+  </Tab>
+  <Tab title="/analyze-frames">
+    **Pre-Extracted Frames Analysis**
+    
+    Analyzes frames already extracted by the ViT model server:
+    
+    ```bash
+    curl -X POST http://localhost:5001/analyze-frames \
+      -H "Content-Type: application/json" \
+      -d '{"frames_dir": "frames_video_name"}'
+    ```
+    
+    This endpoint:
+    - Reads frames from `../flask_server_2/frames/`
+    - Avoids duplicate frame extraction
+    - Enables direct comparison with ViT results
+  </Tab>
+</Tabs>
+
+## Cross-Server Frame Sharing
+
+The `/analyze-frames` endpoint allows the CNN+LSTM model to reuse frames extracted by the ViT server:
+
+```python
+# Look in flask_server_2's frames directory
+full_frames_dir = os.path.join('..', 'flask_server_2', 'frames', frames_dir)
+
+if not os.path.exists(full_frames_dir):
+    return jsonify({'error': 'Frames directory not found'}), 404
+    
+# List and sort frame files
+frame_files = sorted([f for f in os.listdir(full_frames_dir) if f.endswith('.jpg')])
+
+# Analyze each frame
+for frame_name in frame_files:
+    frame_path = os.path.join(full_frames_dir, frame_name)
+    confidence, is_fake = analyze_frame(frame_path)
+```
+
+<Note>
+This cross-server architecture allows IPD to:
+1. Extract frames once using the ViT server
+2. Analyze the same frames with both models
+3. Compare results without redundant processing
+</Note>
+
+## Error Handling
+
+The model includes robust error tracking:
+
+```python
+analysis_errors = 0
+
+for frame in frames:
+    try:
+        frame_path = os.path.join(frames_dir, frame['frame'])
+        confidence, is_fake = analyze_frame(frame_path)
+        total_confidence += confidence
+        frames_analysis.append({...})
+    except Exception as e:
+        print(f"Error analyzing frame: {str(e)}")
+        analysis_errors += 1
+```
+
+<Warning>
+The response includes an `analysis_errors` field that tracks how many frames failed analysis. High error counts may indicate:
+- Corrupted frames
+- Model loading issues
+- Memory constraints
+- Invalid image formats
+</Warning>
+
+## Overall Video Verdict
+
+The verdict calculation matches the ViT model:
+
+```python
+# Calculate overall results
+average_confidence = total_confidence / num_frames
+fake_frames = sum(1 for frame in frames_analysis if frame['is_fake'])
+real_frames = num_frames - fake_frames
+
+# Majority voting
+is_fake = fake_frames > real_frames
+```
+
+<Accordion title="Example Calculation">
+For a video with 25 analyzed frames:
+
+| Metric | Value |
+|--------|-------|
+| Total frames analyzed | 25 |
+| Frames classified as fake | 9 |
+| Frames classified as real | 16 |
+| **Final verdict** | **REAL** (16 > 9) |
+| Average confidence | 0.58 |
+| Analysis errors | 0 |
+
+Since 16 frames (64%) were classified as real, the overall video is marked as real.
+</Accordion>
+
+## Model Weights
+
+The trained model is stored as a Keras HDF5 file:
+
+```
+backend/flask_server/models/deepfake_detection_model.h5
+```
+
+<Info>
+The `.h5` format contains:
+- Complete model architecture (CNN+LSTM layers)
+- Trained weights and biases
+- Training configuration (optimizer, loss function)
+</Info>
+
+## Loading Process
+
+The model loads when the server starts:
+
+```python
+if __name__ == '__main__':
+    if load_model():
+        print("Starting server with CNN+LSTM model loaded")
+        app.run(host='0.0.0.0', port=5001, debug=True)
+    else:
+        print("Failed to load model. Please ensure the model file exists.")
+```
+
+<Accordion title="Startup Sequence">
+1. **Server Initialization**: Flask app is created
+2. **Model Loading**: `load_model()` attempts to load `.h5` file
+3. **Validation**: Checks if model file exists at expected path
+4. **Success Check**: Server only starts if model loads successfully
+5. **Port Binding**: Listens on port 5001 for incoming requests
+</Accordion>
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="Temporal Analysis" icon="timeline">
+    LSTM layers can capture patterns across frame sequences
+  </Card>
+  <Card title="TensorFlow Ecosystem" icon="cube">
+    Easy integration with TensorFlow Serving and TFLite
+  </Card>
+  <Card title="CPU Friendly" icon="microchip">
+    Efficient inference on CPU-only systems
+  </Card>
+  <Card title="Frame Reuse" icon="recycle">
+    Can analyze frames extracted by other models
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+- **Unknown Accuracy**: Model accuracy not documented in filename
+- **Black Box Architecture**: Actual layer configuration stored in `.h5` file
+- **Single Precision**: Uses float32, may have precision limits
+- **Frame Independence**: Despite LSTM architecture, current implementation analyzes frames independently
+</Warning>
+
+## Technical Requirements
+
+```python
+# Required dependencies
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
+import cv2
+import numpy as np
+```
+
+**Installation:**
+
+```bash
+pip install tensorflow opencv-python numpy
+```
+
+## Performance Optimization
+
+<Tabs>
+  <Tab title="Batch Prediction">
+    **Process Multiple Frames**
+    
+    ```python
+    # Stack multiple frames
+batch = np.stack([preprocess(f) for f in frames])
+    
+    # Single batch prediction
+    confidences = model.predict(batch, verbose=0)
+    ```
+    
+    Reduces overhead by processing frames in batches.
+  </Tab>
+  <Tab title="Model Compilation">
+    **Skip Compilation**
+    
+    ```python
+    model = tf.keras.models.load_model(
+        model_path, 
+        compile=False
+    )
+    ```
+    
+    Loads model without compiling (faster startup since we're only doing inference).
+  </Tab>
+  <Tab title="Verbose Control">
+    **Suppress Prediction Output**
+    
+    ```python
+    confidence = model.predict(
+        img_array, 
+        verbose=0
+    )[0][0]
+    ```
+    
+    Disables progress bar output for cleaner logs.
+  </Tab>
+</Tabs>
+
+## Comparison with ViT Model
+
+| Feature | CNN+LSTM | ViT |
+|---------|----------|-----|
+| **Framework** | TensorFlow/Keras | PyTorch |
+| **Port** | 5001 | 5000 |
+| **Input Size** | 224x224 | 224x224 |
+| **Normalization** | [0, 1] scaling | ImageNet mean/std |
+| **Architecture** | CNN + LSTM | Transformer |
+| **Model File** | .h5 (HDF5) | .pt (PyTorch) |
+| **Can Reuse Frames** | Yes | No |
+| **Documented Accuracy** | Unknown | 83.7% |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ViT Model" icon="brain" href="/models/vit-transformer">
+    Learn about the Vision Transformer model
+  </Card>
+  <Card title="Model Comparison" icon="chart-line" href="/models/comparison">
+    Detailed performance comparison
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/posts/create">
+    Integrate the CNN+LSTM model
+  </Card>
+  <Card title="Deployment Guide" icon="server" href="/deployment/backend-setup">
+    Deploy the CNN+LSTM server
+  </Card>
+</CardGroup>

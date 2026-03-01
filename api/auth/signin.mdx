@@ -1,0 +1,148 @@
+---
+title: 'Sign In'
+api: 'POST /signin'
+---
+
+Authenticate an existing user and receive a JWT token.
+
+## Request Body
+
+<ParamField body="username" type="string" required>
+  User's email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password.
+</ParamField>
+
+## Response
+
+<ResponseField name="token" type="string">
+  JWT authentication token containing `userId`, `username`, and `email` claims.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User information object.
+  
+  <ResponseField name="user.username" type="string">
+    User's username (email address).
+  </ResponseField>
+  
+  <ResponseField name="user.email" type="string">
+    User's email address (same as username).
+  </ResponseField>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash curl
+curl -X POST https://your-api-domain.com/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "user@example.com",
+    "password": "securePassword123"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://your-api-domain.com/signin', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    username: 'user@example.com',
+    password: 'securePassword123'
+  })
+});
+
+const data = await response.json();
+console.log(data.token); // JWT token
+console.log(data.user);  // User object
+```
+
+</CodeGroup>
+
+### Success Response (200)
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "username": "user@example.com",
+    "email": "user@example.com"
+  }
+}
+```
+
+## Error Responses
+
+### Validation Error (411)
+
+Returned when request body fails validation.
+
+```json
+{
+  "message": "Email already taken / Incorrect inputs"
+}
+```
+
+### Authentication Error (411)
+
+Returned when credentials are invalid (user not found or password mismatch).
+
+```json
+{
+  "message": "Error while logging in"
+}
+```
+
+<Note>
+The signin endpoint returns the same error code (411) for both validation failures and authentication failures. Consider using different status codes (e.g., 401 for authentication failures) in production.
+</Note>
+
+<Warning>
+Authentication uses plain text password comparison. This is not secure for production use. Implement password hashing with bcrypt and use secure password verification.
+</Warning>
+
+## Validation Rules
+
+- **username**: Must be a valid email address (validated by Zod's `.email()` method)
+- **password**: Required string field
+- Credentials are verified by direct database lookup matching both username and password
+
+## Implementation Details
+
+The endpoint uses Zod schema validation defined in backend/index.js:78-81:
+
+```javascript
+const signinBody = zod.object({
+    username: zod.string().email(),
+    password: zod.string()
+})
+```
+
+The JWT token is signed with the `JWT_SECRET` environment variable and contains three claims:
+- `userId`: MongoDB ObjectId of the user
+- `username`: User's email address
+- `email`: User's email address (duplicate of username)
+
+## JWT Token Structure
+
+The returned JWT token includes the following payload:
+
+```json
+{
+  "userId": "507f1f77bcf86cd799439011",
+  "username": "user@example.com",
+  "email": "user@example.com"
+}
+```
+
+Use this token in the `Authorization` header for authenticated requests:
+
+```
+Authorization: Bearer <token>
+```

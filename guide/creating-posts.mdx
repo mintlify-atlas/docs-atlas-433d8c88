@@ -1,0 +1,307 @@
+---
+title: 'Creating Posts'
+description: 'Learn how to create and share posts with images and videos'
+icon: 'plus'
+---
+
+## Overview
+
+The IPD platform allows you to create posts with images or videos. When you upload a video, it's automatically analyzed for deepfake content using AI models.
+
+<Info>
+  You must be [authenticated](/guide/authentication) to create posts.
+</Info>
+
+## Creating a New Post
+
+<Steps>
+  <Step title="Navigate to Create Post">
+    Access the post creation page:
+    - Click the **"Share a Video"** button on the community page
+    - Or navigate directly to `/create-post`
+    
+    <Note>
+      If you're not logged in, you'll be automatically redirected to the login page.
+    </Note>
+  </Step>
+  
+  <Step title="Fill in Post Details">
+    Complete the form with the following information:
+    
+    ### Title (Required)
+    Enter a descriptive title for your post
+    
+    ### Content (Required)
+    Write your post content or description. This field supports:
+    - Multiple lines of text
+    - Whitespace and line breaks
+    - Text descriptions of your media
+    
+    <Tip>
+      Write clear, engaging titles and descriptions to help your post stand out in the community feed.
+    </Tip>
+  </Step>
+  
+  <Step title="Upload Media">
+    Click the upload area or drag and drop a file:
+    
+    **Supported Image Formats:**
+    - JPEG (.jpg, .jpeg)
+    - PNG (.png)
+    - GIF (.gif)
+    
+    **Supported Video Formats:**
+    - MP4 (.mp4)
+    - QuickTime (.mov)
+    - AVI (.avi)
+    
+    **File Size Limit:** 100MB
+    
+    <Warning>
+      Only one media file (image or video) can be uploaded per post. The system automatically detects the file type.
+    </Warning>
+  </Step>
+  
+  <Step title="Preview Your Media">
+    After selecting a file, you'll see a preview:
+    - **Images**: Display as a thumbnail preview
+    - **Videos**: Display with playback controls
+    
+    You can click the **X** button to remove the file and select a different one.
+  </Step>
+  
+  <Step title="Submit Your Post">
+    Click the **"Create Post"** button to publish. The system will:
+    1. Validate all required fields
+    2. Upload your media file to the server
+    3. Create the post in the database
+    4. Start automatic deepfake analysis (for videos)
+    5. Redirect you to your new post page
+  </Step>
+</Steps>
+
+## What Happens After Creation
+
+<Tabs>
+  <Tab title="Image Posts">
+    When you create an image post:
+    
+    ```json
+    {
+      "title": "Your Title",
+      "content": "Your content",
+      "media_type": "image",
+      "media_url": "/uploads/1234567890-image.jpg",
+      "analysis_status": "none",
+      "creator": "user_id"
+    }
+    ```
+    
+    - The image is uploaded and saved
+    - Post is immediately available in feeds
+    - No analysis is performed on images
+    - `analysis_status` is set to `"none"`
+  </Tab>
+  
+  <Tab title="Video Posts">
+    When you create a video post:
+    
+    ```json
+    {
+      "title": "Your Title",
+      "content": "Your content",
+      "media_type": "video",
+      "media_url": "/uploads/1234567890-video.mp4",
+      "analysis_status": "processing",
+      "creator": "user_id"
+    }
+    ```
+    
+    - The video is uploaded and saved
+    - Post is immediately visible with "Processing" badge
+    - **Automatic deepfake analysis begins in the background**
+    - Analysis extracts frames and runs AI detection
+    - `analysis_status` changes from `"processing"` to `"completed"`
+    
+    <Info>
+      Video analysis happens asynchronously - you don't need to wait for it to complete!
+    </Info>
+  </Tab>
+</Tabs>
+
+## Video Analysis Process
+
+When you upload a video, the following happens automatically:
+
+<Steps>
+  <Step title="Frame Extraction">
+    The deepfake detector extracts multiple frames from your video for analysis.
+  </Step>
+  
+  <Step title="AI Analysis">
+    Each frame is analyzed using the AI model to detect potential deepfake artifacts:
+    - Face detection
+    - Artifact analysis
+    - Confidence scoring
+  </Step>
+  
+  <Step title="Results Aggregation">
+    The system calculates:
+    - Overall confidence score
+    - Fake vs. real frame counts
+    - Final verdict (REAL or DEEPFAKE)
+    - Per-frame analysis data
+  </Step>
+  
+  <Step title="Status Update">
+    The post status changes to `"completed"` and results are displayed with:
+    - Analysis badge on the video
+    - Detailed results page
+    - Frame-by-frame breakdown
+  </Step>
+</Steps>
+
+### Analysis Result Format
+
+```json
+{
+  "deepfake_analysis": {
+    "frames_analysis": [
+      {
+        "frame": "frame_1.jpg",
+        "frame_path": "/uploads/frames/frame_1.jpg",
+        "confidence": 0.85,
+        "is_fake": false
+      }
+    ],
+    "confidence": 0.82,
+    "is_fake": false,
+    "summary": {
+      "status": "REAL",
+      "confidence_percentage": 18,
+      "total_frames": 10,
+      "real_frames": 9,
+      "fake_frames": 1
+    }
+  },
+  "analysis_status": "completed"
+}
+```
+
+## Post Visibility
+
+### Where Your Posts Appear
+
+<CardGroup cols={2}>
+  <Card title="Your Dashboard" icon="grid">
+    All your posts appear in your personal dashboard at `/dashboard`. View your content history and analysis results.
+  </Card>
+  
+  <Card title="Community Feed" icon="users">
+    Your posts are visible to all users in the community feed at `/community`. Others can view, like, and comment.
+  </Card>
+  
+  <Card title="Direct Links" icon="link">
+    Each post gets a unique URL: `/posts/{post_id}` for direct sharing and access.
+  </Card>
+  
+  <Card title="Analysis Pages" icon="chart-line">
+    Video posts have dedicated analysis pages: `/posts/{post_id}/analysis` showing detailed results.
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="No Media File Uploaded">
+    Error: `"Please select an image or video"`
+    
+    **Solution:** Select a media file before submitting the post.
+  </Accordion>
+  
+  <Accordion title="Invalid File Type">
+    Error: `"Invalid file type. Please upload an image or video."`
+    
+    **Solution:** Ensure your file is one of the supported formats:
+    - Images: JPEG, PNG, GIF
+    - Videos: MP4, MOV, AVI
+  </Accordion>
+  
+  <Accordion title="File Too Large">
+    The upload will abort if the file exceeds 100MB.
+    
+    **Solution:** 
+    - Compress your video using a tool like HandBrake
+    - Reduce video resolution or bitrate
+    - Trim unnecessary portions of the video
+  </Accordion>
+  
+  <Accordion title="Authentication Error (401)">
+    Error: `"You must be logged in to create a post"`
+    
+    **Solution:**
+    - Your token expired or is invalid
+    - Sign in again to get a fresh authentication token
+    - The system will redirect you to the login page
+  </Accordion>
+  
+  <Accordion title="Upload Failed">
+    Error: `"Failed to create post. Please try again."`
+    
+    **Solution:**
+    - Check your internet connection
+    - Ensure the server is running
+    - Try uploading again
+    - Check browser console for detailed error messages
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Descriptive Titles" icon="heading">
+    Use clear, specific titles that describe your video content for better discoverability.
+  </Card>
+  
+  <Card title="Detailed Content" icon="file-text">
+    Write informative descriptions explaining what the video shows or why you're sharing it.
+  </Card>
+  
+  <Card title="Quality Media" icon="video">
+    Upload high-quality videos for more accurate deepfake detection results.
+  </Card>
+  
+  <Card title="Appropriate Content" icon="shield-check">
+    Share authentic content and respect community guidelines.
+  </Card>
+</CardGroup>
+
+## Technical Details
+
+### Form Fields
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| Title | Text | Yes | Non-empty string |
+| Content | Textarea | Yes | Non-empty string, supports multiline |
+| Media | File | Yes | Image or video format, max 100MB |
+
+### API Endpoint
+
+```
+POST /api/posts
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+```
+
+**Form Data:**
+- `title`: string
+- `content`: string
+- `image` or `video`: file
+- `author`: string (automatically set from token)
+
+## Next Steps
+
+- [View detailed video analysis results](/guide/viewing-results)
+- [Analyze with the old model](/guide/analyzing-videos)
+- [Engage with the community](/guide/community)

@@ -1,0 +1,348 @@
+---
+title: Backend Setup
+description: Configure and deploy the Node.js backend server
+---
+
+## Overview
+
+The IPD backend is built with Node.js and Express, providing RESTful APIs for authentication, post management, and ML model integration.
+
+## Installation
+
+<Steps>
+  <Step title="Navigate to Backend Directory">
+    ```bash
+    cd backend
+    ```
+  </Step>
+
+  <Step title="Install Dependencies">
+    Install all required npm packages:
+    
+    ```bash
+    npm install
+    ```
+    
+    <Accordion title="View Dependencies">
+      The following packages will be installed from `package.json`:
+      
+      | Package | Version | Purpose |
+      |---------|---------|----------|
+      | `express` | ^4.21.2 | Web framework |
+      | `mongoose` | ^8.9.5 | MongoDB ODM |
+      | `jsonwebtoken` | ^9.0.2 | JWT authentication |
+      | `cors` | ^2.8.5 | Cross-origin requests |
+      | `dotenv` | ^16.4.7 | Environment variables |
+      | `axios` | ^1.7.9 | HTTP client |
+      | `multer` | ^1.4.5-lts.1 | File upload handling |
+      | `express-fileupload` | ^1.5.1 | File upload middleware |
+      | `fluent-ffmpeg` | ^2.1.3 | Video processing |
+      | `cloudinary` | ^2.5.1 | Media storage |
+      | `@google/generative-ai` | ^0.21.0 | Google Gemini AI |
+      | `python-shell` | ^5.0.0 | Python integration |
+      | `zod` | ^3.24.1 | Schema validation |
+      | `jwt-decode` | ^4.0.0 | JWT token decoding |
+      | `form-data` | ^4.0.1 | Form data handling |
+    </Accordion>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the `backend` directory:
+    
+    ```bash
+    touch .env
+    ```
+    
+    Add the following configuration:
+    
+    ```bash .env
+    # Server Configuration
+    PORT=3000
+    NODE_ENV=development
+    
+    # Database
+    MONGO_URI=mongodb://localhost:27017/ipd
+    # Or for MongoDB Atlas:
+    # MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/ipd
+    
+    # JWT Secret (generate a secure random string)
+    JWT_SECRET=your_secure_jwt_secret_key_here_change_in_production
+    
+    # Cloudinary Configuration
+    CLOUDINARY_CLOUD_NAME=your_cloud_name
+    CLOUDINARY_API_KEY=your_api_key
+    CLOUDINARY_API_SECRET=your_api_secret
+    
+    # Google Gemini AI
+    GEMINI_API_KEY=your_gemini_api_key
+    
+    # Flask ML Servers
+    FLASK_SERVER_1_URL=http://localhost:5000
+    FLASK_SERVER_2_URL=http://localhost:5001
+    ```
+    
+    <Warning>
+      Never commit the `.env` file to version control. It contains sensitive credentials.
+    </Warning>
+    
+    <Info>
+      Generate a secure JWT secret using:
+      ```bash
+      node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      ```
+    </Info>
+  </Step>
+
+  <Step title="Create Upload Directories">
+    The backend requires directories for file uploads:
+    
+    ```bash
+    mkdir -p uploads
+    mkdir -p flask_server/uploads flask_server/frames flask_server/models
+    mkdir -p flask_server_2/uploads flask_server_2/frames flask_server_2/models
+    ```
+    
+    <Note>
+      These directories are created automatically by the application if they don't exist, but creating them manually ensures proper permissions.
+    </Note>
+  </Step>
+</Steps>
+
+## Database Setup
+
+<Steps>
+  <Step title="Start MongoDB">
+    If using local MongoDB:
+    
+    ```bash
+    # Start MongoDB service
+    sudo systemctl start mongod
+    
+    # Verify MongoDB is running
+    sudo systemctl status mongod
+    ```
+    
+    For MongoDB Atlas, ensure your connection string is correct in `.env`.
+  </Step>
+
+  <Step title="Verify Connection">
+    The application will automatically connect to MongoDB on startup. Check the console logs for:
+    
+    ```
+    Successfully connected to DB
+    ```
+  </Step>
+</Steps>
+
+## Running the Backend
+
+<CodeGroup>
+```bash Development Mode
+# Using nodemon (auto-restart on changes)
+npm start
+
+# Or directly with node
+node index.js
+```
+
+```bash Production Mode
+# Set environment to production
+export NODE_ENV=production
+
+# Run with PM2 (recommended)
+npm install -g pm2
+pm2 start index.js --name ipd-backend
+
+# Or use node directly
+node index.js
+```
+</CodeGroup>
+
+<Info>
+  The server will start on the port specified in `.env` (default: 3000). You should see:
+  ```
+  Server is running on port 3000
+  Successfully connected to DB
+  ```
+</Info>
+
+## API Endpoints
+
+Once running, the backend exposes the following endpoints:
+
+<AccordionGroup>
+  <Accordion title="Authentication">
+    | Method | Endpoint | Description |
+    |--------|----------|-------------|
+    | POST | `/signup` | Create new user account |
+    | POST | `/signin` | Authenticate user and get JWT token |
+  </Accordion>
+
+  <Accordion title="Posts Management">
+    | Method | Endpoint | Description |
+    |--------|----------|-------------|
+    | GET | `/api/posts` | Get all posts |
+    | POST | `/api/posts` | Create new post |
+    | GET | `/api/posts/:id` | Get post by ID |
+    | PUT | `/api/posts/:id` | Update post |
+    | DELETE | `/api/posts/:id` | Delete post |
+  </Accordion>
+
+  <Accordion title="Static Files">
+    | Method | Endpoint | Description |
+    |--------|----------|-------------|
+    | GET | `/uploads/*` | Serve uploaded files |
+    | GET | `/uploads/frames/*` | Serve video frame images |
+  </Accordion>
+</AccordionGroup>
+
+## Configuration Details
+
+### File Upload Configuration
+
+The backend uses `multer` and `express-fileupload` for handling uploads:
+
+```javascript
+// Uploads directory (backend/index.js:22-24)
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+```
+
+### JWT Authentication
+
+JWT tokens are issued on successful signup/signin:
+
+```javascript
+// Token payload (backend/index.js:67-69)
+const token = jwt.sign({
+    userId,
+    username,
+    email
+}, process.env.JWT_SECRET);
+```
+
+### Database Schema
+
+User schema defined in `backend/db.js`:
+
+- `username` (String, required, unique, email format)
+- `password` (String, required, min 6 characters)
+- `firstName` (String, required, max 50 characters)
+- `lastName` (String, required, max 50 characters)
+- Timestamps (createdAt, updatedAt)
+
+<Warning>
+  The current implementation stores passwords in plain text. **This is not secure for production.** Implement password hashing using bcrypt before deploying to production.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port Already in Use">
+    If port 3000 is busy, the server will automatically try port 3001:
+    
+    ```javascript
+    // backend/index.js:124-130
+    .on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`Port ${PORT} is busy, trying ${PORT + 1}`);
+        app.listen(PORT + 1);
+      }
+    });
+    ```
+    
+    Or manually specify a different port in `.env`:
+    ```bash
+    PORT=3001
+    ```
+  </Accordion>
+
+  <Accordion title="MongoDB Connection Failed">
+    **Check MongoDB is running:**
+    ```bash
+    sudo systemctl status mongod
+    ```
+    
+    **Verify connection string:**
+    - For local: `mongodb://localhost:27017/ipd`
+    - For Atlas: Check whitelist and credentials
+    
+    **Check MongoDB logs:**
+    ```bash
+    sudo journalctl -u mongod -f
+    ```
+  </Accordion>
+
+  <Accordion title="Module Not Found Errors">
+    Reinstall dependencies:
+    ```bash
+    rm -rf node_modules package-lock.json
+    npm install
+    ```
+  </Accordion>
+
+  <Accordion title="FFmpeg Not Found">
+    Install FFmpeg system-wide:
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install ffmpeg
+    
+    # macOS
+    brew install ffmpeg
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring and Logs
+
+<Tabs>
+  <Tab title="Development">
+    Logs are printed to console. Use:
+    ```bash
+    npm start | tee backend.log
+    ```
+    to save logs to file.
+  </Tab>
+  
+  <Tab title="Production (PM2)">
+    View logs with PM2:
+    ```bash
+    # View all logs
+    pm2 logs ipd-backend
+    
+    # View only errors
+    pm2 logs ipd-backend --err
+    
+    # Save logs to file
+    pm2 install pm2-logrotate
+    ```
+  </Tab>
+</Tabs>
+
+## Security Considerations
+
+<Warning>
+  Before deploying to production:
+  
+  1. **Hash passwords** using bcrypt or argon2
+  2. **Use HTTPS** for all connections
+  3. **Set secure CORS origins** (not `*`)
+  4. **Rate limit** authentication endpoints
+  5. **Validate all inputs** thoroughly
+  6. **Use environment-specific** JWT secrets
+  7. **Enable MongoDB authentication**
+  8. **Keep dependencies updated** (`npm audit`)
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Frontend Setup" icon="browser" href="/deployment/frontend-setup">
+    Set up the React frontend to connect to this backend
+  </Card>
+  <Card title="ML Models" icon="brain" href="/deployment/ml-models">
+    Deploy Flask servers for deepfake detection
+  </Card>
+</CardGroup>

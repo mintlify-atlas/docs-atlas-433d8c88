@@ -1,0 +1,216 @@
+---
+title: 'Get All Posts'
+api: 'GET /api/posts'
+description: 'Retrieve all posts with creator information and analysis results'
+---
+
+## Authentication
+
+This endpoint does not require authentication.
+
+## Response
+
+Returns an array of post objects sorted by creation date (newest first).
+
+<ResponseField name="id" type="string">
+  Unique identifier for the post
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The title of the post
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The content of the post
+</ResponseField>
+
+<ResponseField name="media_url" type="string">
+  URL path to the media file
+</ResponseField>
+
+<ResponseField name="media_type" type="string">
+  Type of media: `image` or `video`
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp when the post was created
+</ResponseField>
+
+<ResponseField name="profiles" type="object">
+  Creator information
+  
+  <ResponseField name="username" type="string">
+    Username of the post creator
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="likes_count" type="number">
+  Total number of likes on the post
+</ResponseField>
+
+<ResponseField name="comments_count" type="number">
+  Total number of comments on the post
+</ResponseField>
+
+<ResponseField name="analysis_status" type="string">
+  Status of deepfake analysis: `none`, `processing`, `completed`, or `failed`
+</ResponseField>
+
+<ResponseField name="deepfake_analysis" type="object" nullable>
+  Deepfake analysis results (null if not analyzed)
+  
+  <ResponseField name="is_fake" type="boolean">
+    Whether the video is classified as a deepfake
+  </ResponseField>
+  
+  <ResponseField name="confidence" type="number">
+    Average confidence score across all frames (0-1)
+  </ResponseField>
+  
+  <ResponseField name="frames_analysis" type="array">
+    Array of frame-level analysis results
+    
+    <ResponseField name="frame" type="string">
+      Frame identifier/number
+    </ResponseField>
+    
+    <ResponseField name="confidence" type="number">
+      Confidence score for this frame (0-1)
+    </ResponseField>
+    
+    <ResponseField name="is_fake" type="boolean">
+      Whether this frame is classified as fake
+    </ResponseField>
+    
+    <ResponseField name="frame_path" type="string">
+      Path to the extracted frame image
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="summary" type="object">
+    Summary statistics of the analysis
+    
+    <ResponseField name="status" type="string">
+      Overall classification: `REAL` or `FAKE`
+    </ResponseField>
+    
+    <ResponseField name="confidence_percentage" type="number">
+      Confidence percentage (0-100)
+    </ResponseField>
+    
+    <ResponseField name="total_frames" type="number">
+      Total number of frames analyzed
+    </ResponseField>
+    
+    <ResponseField name="real_frames" type="number">
+      Number of frames classified as real
+    </ResponseField>
+    
+    <ResponseField name="fake_frames" type="number">
+      Number of frames classified as fake
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3000/api/posts
+```
+
+```javascript JavaScript
+const response = await fetch('http://localhost:3000/api/posts');
+const posts = await response.json();
+
+console.log(`Found ${posts.length} posts`);
+```
+
+```python Python
+import requests
+
+response = requests.get("http://localhost:3000/api/posts")
+posts = response.json()
+
+print(f"Found {len(posts)} posts")
+```
+
+</CodeGroup>
+
+## Response Example
+
+```json
+[
+  {
+    "id": "507f1f77bcf86cd799439011",
+    "title": "Deepfake Detection Test",
+    "content": "Testing the analysis on this video",
+    "media_url": "/uploads/1709251200000-123456789.mp4",
+    "media_type": "video",
+    "created_at": "2026-03-01T12:00:00.000Z",
+    "profiles": {
+      "username": "johndoe"
+    },
+    "likes_count": 5,
+    "comments_count": 3,
+    "analysis_status": "completed",
+    "deepfake_analysis": {
+      "is_fake": true,
+      "confidence": 0.87,
+      "frames_analysis": [
+        {
+          "frame": "frame_0",
+          "confidence": 0.92,
+          "is_fake": true,
+          "frame_path": "/frames/1709251200000-123456789/frame_0.jpg"
+        },
+        {
+          "frame": "frame_1",
+          "confidence": 0.85,
+          "is_fake": true,
+          "frame_path": "/frames/1709251200000-123456789/frame_1.jpg"
+        },
+        {
+          "frame": "frame_2",
+          "confidence": 0.45,
+          "is_fake": false,
+          "frame_path": "/frames/1709251200000-123456789/frame_2.jpg"
+        }
+      ],
+      "summary": {
+        "status": "FAKE",
+        "confidence_percentage": 75,
+        "total_frames": 30,
+        "real_frames": 10,
+        "fake_frames": 20
+      }
+    }
+  },
+  {
+    "id": "507f1f77bcf86cd799439012",
+    "title": "Beautiful Sunset",
+    "content": "Just a nice photo",
+    "media_url": "/uploads/1709251300000-987654321.jpg",
+    "media_type": "image",
+    "created_at": "2026-03-01T11:30:00.000Z",
+    "profiles": {
+      "username": "janedoe"
+    },
+    "likes_count": 12,
+    "comments_count": 7,
+    "analysis_status": "none",
+    "deepfake_analysis": null
+  }
+]
+```
+
+## Error Responses
+
+<ResponseField name="500 - Server Error">
+  ```json
+  {
+    "message": "Error message details"
+  }
+  ```
+</ResponseField>

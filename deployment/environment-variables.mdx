@@ -1,0 +1,125 @@
+---
+title: Environment Variables
+description: Configure required environment variables for the IPD backend services
+---
+
+The IPD backend requires specific environment variables to function properly. These variables control database connections, authentication, and server configuration.
+
+## Required Variables
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key for JWT token signing and verification. Used for user authentication.
+  
+  **Usage:** Used in `backend/index.js` for signing tokens during signup/signin and in `backend/middleware/auth.js` for token verification.
+  
+  **Example:** `your-secret-key-here` (use a strong, random string in production)
+</ParamField>
+
+<ParamField path="MONGO_URI" type="string" required>
+  MongoDB connection string for database access.
+  
+  **Usage:** Used in `backend/db.js` to establish connection to MongoDB with `useNewUrlParser` and `useUnifiedTopology` options.
+  
+  **Example:** `mongodb://localhost:27017/ipd` or `mongodb+srv://username:password@cluster.mongodb.net/ipd`
+</ParamField>
+
+<ParamField path="PORT" type="number" default="3000">
+  Port number for the Express backend server.
+  
+  **Usage:** Used in `backend/index.js`. Falls back to port 3000 if not specified. Automatically tries PORT+1 if the port is busy.
+  
+  **Example:** `3000`
+</ParamField>
+
+## Setup Instructions
+
+<Steps>
+  <Step title="Create environment file">
+    Create a `.env` file in the `backend/` directory:
+    
+    ```bash
+    cd backend
+    touch .env
+    ```
+  </Step>
+  
+  <Step title="Add required variables">
+    Add the following variables to your `.env` file:
+    
+    ```bash .env
+    JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    MONGO_URI=mongodb://localhost:27017/ipd
+    PORT=3000
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. Ensure it's listed in `.gitignore`.
+    </Warning>
+  </Step>
+  
+  <Step title="Verify configuration">
+    The backend automatically loads environment variables using `dotenv` package:
+    
+    ```javascript backend/index.js
+    require('dotenv').config();
+    ```
+    
+    Start the server to verify configuration:
+    
+    ```bash
+    npm start
+    ```
+    
+    You should see:
+    ```
+    Successfully connected to DB
+    Server is running on port 3000
+    ```
+  </Step>
+</Steps>
+
+## Production Considerations
+
+<Info>
+  **JWT_SECRET**: Generate a strong random string (at least 32 characters) using a cryptographic random generator:
+  
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+</Info>
+
+<Warning>
+  **MONGO_URI**: For production deployments:
+  - Use MongoDB Atlas or a managed MongoDB service
+  - Enable authentication and SSL/TLS
+  - Use connection string with authentication credentials
+  - Set up IP whitelisting for security
+</Warning>
+
+## Port Configuration
+
+The backend server includes automatic port fallback:
+
+```javascript backend/index.js:121-130
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`Port ${PORT} is busy, trying ${PORT + 1}`);
+    app.listen(PORT + 1);
+  } else {
+    console.error('Server error:', err);
+  }
+});
+```
+
+This ensures the server starts even if the specified port is in use.
+
+## Environment Variable Access
+
+Environment variables are accessed throughout the codebase:
+
+- **Authentication**: `process.env.JWT_SECRET` (index.js:69, index.js:101, middleware/auth.js:10)
+- **Database**: `process.env.MONGO_URI` (db.js:6)
+- **Server Port**: `process.env.PORT` (index.js:121)

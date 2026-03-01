@@ -1,0 +1,480 @@
+---
+title: 'Social Platform Features'
+description: 'Explore posts, comments, likes, and community interaction on IPD'
+icon: 'users'
+---
+
+## Overview
+
+IPD combines deepfake detection with a full-featured social media platform. Users can create posts with images or videos, engage through likes and comments, and view their content in a personalized feed.
+
+## Core Features
+
+<CardGroup cols={2}>
+  <Card title="Posts" icon="image">
+    Share images and videos with the community
+  </Card>
+  
+  <Card title="Comments" icon="message">
+    Discuss and engage with community content
+  </Card>
+  
+  <Card title="Likes" icon="heart">
+    Show appreciation for posts you enjoy
+  </Card>
+  
+  <Card title="User Profiles" icon="user">
+    View your posts and activity history
+  </Card>
+</CardGroup>
+
+## Creating Posts
+
+### Upload Process
+
+Users can create posts with either images or videos:
+
+<Steps>
+  <Step title="Access Create Post">
+    Click "Create Post" in the navigation bar. Authentication is required.
+    
+    ```typescript
+    // frontend/src/components/CreatePost.tsx:18-23
+    useEffect(() => {
+      if (!token || !userId) {
+        navigate('/login');
+      }
+    }, [token, userId, navigate]);
+    ```
+  </Step>
+  
+  <Step title="Fill Post Details">
+    Enter required information:
+    - **Title**: Brief description of your post
+    - **Content**: Detailed text content
+    - **Media**: Upload image (JPG, PNG, GIF) or video (MP4, MOV, AVI)
+  </Step>
+  
+  <Step title="Upload Media">
+    Drag and drop or click to select media file. Preview appears immediately.
+    
+    ```typescript
+    // frontend/src/components/CreatePost.tsx:81-97
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = e.target.files?.[0];
+      if (selectedFile) {
+        // Validate file type
+        if (!selectedFile.type.startsWith('image/') && 
+            !selectedFile.type.startsWith('video/')) {
+          setError('Please select an image or video file');
+          return;
+        }
+        
+        setFile(selectedFile);
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPreviewUrl(reader.result as string);
+        };
+        reader.readAsDataURL(selectedFile);
+      }
+    };
+    ```
+  </Step>
+  
+  <Step title="Submit">
+    Click "Create Post" to upload. Videos automatically queue for deepfake analysis.
+  </Step>
+</Steps>
+
+### File Restrictions
+
+<Tabs>
+  <Tab title="Images">
+    **Supported Formats**:
+    - JPEG (.jpg, .jpeg)
+    - PNG (.png)
+    - GIF (.gif)
+    
+    **Max Size**: 100MB
+    
+    **Note**: Images are displayed immediately without analysis.
+  </Tab>
+  
+  <Tab title="Videos">
+    **Supported Formats**:
+    - MP4 (.mp4)
+    - QuickTime (.mov)
+    - AVI (.avi)
+    
+    **Max Size**: 100MB
+    
+    **Processing**: Videos automatically undergo deepfake detection after upload.
+    
+    ```javascript
+    // backend/routes/post.js:135-136
+    analysis_status: mediaType === 'video' ? 'processing' : 'none'
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+Files exceeding 100MB are rejected. Compress large videos before uploading.
+</Warning>
+
+## Post Interactions
+
+### Likes
+
+Users can like posts to show appreciation:
+
+```javascript
+// backend/routes/post.js:245-264
+router.post('/:id/like', authMiddleware, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) {
+    return res.status(404).json({ message: 'Post not found' });
+  }
+
+  const likeIndex = post.likes.indexOf(req.user.id);
+  if (likeIndex === -1) {
+    // Add like
+    post.likes.push(req.user.id);
+  } else {
+    // Remove like (toggle)
+    post.likes.splice(likeIndex, 1);
+  }
+
+  await post.save();
+  res.json({ likes: post.likes.length });
+});
+```
+
+<Info>
+Likes are toggled - clicking the heart again removes your like. The counter updates in real-time.
+</Info>
+
+### Comments
+
+Add threaded discussions to any post:
+
+```javascript
+// backend/routes/post.js:206-242
+router.post('/:id/comments', authMiddleware, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) {
+    return res.status(404).json({ message: 'Post not found' });
+  }
+
+  const newComment = {
+    user: req.user.id,
+    content: req.body.content,
+    createdAt: new Date()
+  };
+
+  post.comments.push(newComment);
+  await post.save();
+  
+  // Populate user information
+  await post.populate('comments.user', 'username');
+  
+  const addedComment = post.comments[post.comments.length - 1];
+  
+  return {
+    id: addedComment._id,
+    content: addedComment.content,
+    created_at: addedComment.createdAt,
+    profiles: {
+      username: addedComment.user.username
+    }
+  };
+});
+```
+
+**Comment Features**:
+- Real-time addition to comment thread
+- Display username and timestamp
+- Supports multi-line text
+- Chronological ordering (newest first)
+
+### UI Display
+
+The post detail page shows all interactions:
+
+```typescript
+// frontend/src/components/PostDetails.tsx:208-227
+<div className="flex items-center justify-between border-t border-b border-[#151616]/10 py-4 mb-8">
+  <div className="flex items-center space-x-4">
+    <button
+      onClick={handleLike}
+      className={`flex items-center space-x-2 ${
+        isLiked ? 'text-red-500' : 'text-[#151616]/70'
+      } hover:text-red-500 transition`}
+    >
+      <Heart className={`h-6 w-6 ${isLiked ? 'fill-current' : ''}`} />
+      <span>{likesCount}</span>
+    </button>
+    <div className="flex items-center space-x-2 text-[#151616]/70">
+      <MessageCircle className="h-6 w-6" />
+      <span>{comments.length}</span>
+    </div>
+  </div>
+  <div className="text-sm text-[#151616]/70">
+    Posted by {post.profiles.username}
+  </div>
+</div>
+```
+
+## Community Feed
+
+The main feed displays all posts from the community:
+
+### Post Retrieval
+
+```javascript
+// backend/routes/post.js:22-59
+router.get('/', async (req, res) => {
+  const posts = await Post.find()
+    .populate('creator', 'username')
+    .populate('comments.user', 'username')
+    .sort('-createdAt');  // Newest first
+
+  const transformedPosts = posts.map(post => ({
+    id: post._id,
+    title: post.title,
+    content: post.content,
+    media_url: post.media_url,
+    media_type: post.media_type,
+    created_at: post.createdAt,
+    profiles: {
+      username: post.creator.username
+    },
+    likes_count: post.likes.length,
+    comments_count: post.comments.length,
+    analysis_status: post.analysis_status,
+    deepfake_analysis: post.deepfake_analysis ? {
+      is_fake: post.deepfake_analysis.is_fake,
+      confidence: post.deepfake_analysis.confidence,
+      frames_analysis: post.deepfake_analysis.frames_analysis,
+      summary: post.deepfake_analysis.summary
+    } : null
+  }));
+
+  res.json(transformedPosts);
+});
+```
+
+### Feed Features
+
+<Accordion title="Sorting">
+  Posts are sorted by creation date in descending order. Newest posts appear at the top of the feed.
+</Accordion>
+
+<Accordion title="Post Cards">
+  Each post card displays:
+  - Media preview (image or video thumbnail)
+  - Title and content excerpt
+  - Author username
+  - Like and comment counts
+  - Analysis status badge (for videos)
+  - Timestamp
+</Accordion>
+
+<Accordion title="Analysis Badges">
+  Video posts show real-time analysis status:
+  - **Processing**: Animated spinner
+  - **Completed - REAL**: Green badge
+  - **Completed - FAKE**: Red badge
+  - **Failed**: Error indicator
+</Accordion>
+
+## User Dashboard
+
+Users can view their own posts and activity:
+
+```javascript
+// backend/routes/post.js:266-297
+router.get('/user/posts', authMiddleware, async (req, res) => {
+  const posts = await Post.find({ creator: req.user.id })
+    .populate('creator', 'username')
+    .sort('-createdAt');
+
+  const transformedPosts = posts.map(post => ({
+    id: post._id,
+    title: post.title,
+    content: post.content,
+    media_url: post.media_url,
+    media_type: post.media_type,
+    created_at: post.createdAt,
+    analysis_status: post.analysis_status,
+    deepfake_analysis: post.deepfake_analysis ? {
+      is_fake: post.deepfake_analysis.is_fake,
+      confidence: post.deepfake_analysis.confidence,
+      frames_analysis: post.deepfake_analysis.frames_analysis
+    } : null,
+    profiles: {
+      username: post.creator.username
+    }
+  }));
+
+  res.json(transformedPosts);
+});
+```
+
+<Tip>
+The user dashboard filters posts to show only content created by the authenticated user.
+</Tip>
+
+## Data Models
+
+### Post Schema
+
+```javascript
+// backend/models/Post.js:3-72
+const postSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  content: {
+    type: String,
+    required: true
+  },
+  media_url: {
+    type: String,
+    required: true
+  },
+  media_type: {
+    type: String,
+    enum: ['image', 'video'],
+    required: true
+  },
+  creator: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  likes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  comments: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    content: {
+      type: String,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  analysis_status: {
+    type: String,
+    enum: ['none', 'processing', 'completed', 'failed'],
+    default: 'none'
+  },
+  deepfake_analysis: {
+    is_fake: Boolean,
+    confidence: Number,
+    frames_analysis: [{
+      frame: String,
+      confidence: Number,
+      is_fake: Boolean,
+      frame_path: String
+    }],
+    summary: {
+      status: String,
+      confidence_percentage: Number,
+      total_frames: Number,
+      real_frames: Number,
+      fake_frames: Number
+    }
+  }
+}, { timestamps: true });
+```
+
+## API Reference
+
+<Tabs>
+  <Tab title="Get All Posts">
+    ```http
+    GET /api/posts
+    ```
+    
+    Returns all posts in reverse chronological order.
+    
+    **Authentication**: Optional
+    
+    **Response**: Array of post objects
+  </Tab>
+  
+  <Tab title="Get Single Post">
+    ```http
+    GET /api/posts/:id
+    ```
+    
+    Returns detailed information for a specific post.
+    
+    **Authentication**: Required
+    
+    **Response**: Single post object with populated relations
+  </Tab>
+  
+  <Tab title="Create Post">
+    ```http
+    POST /api/posts
+    Content-Type: multipart/form-data
+    ```
+    
+    Creates a new post with media upload.
+    
+    **Body**:
+    - `title` (string, required)
+    - `content` (string, required)
+    - `image` or `video` (file, required)
+    
+    **Authentication**: Required
+  </Tab>
+  
+  <Tab title="Like Post">
+    ```http
+    POST /api/posts/:id/like
+    ```
+    
+    Toggles like status for the authenticated user.
+    
+    **Authentication**: Required
+    
+    **Response**: `{ likes: number }`
+  </Tab>
+  
+  <Tab title="Add Comment">
+    ```http
+    POST /api/posts/:id/comments
+    Content-Type: application/json
+    ```
+    
+    Adds a comment to the post.
+    
+    **Body**: `{ content: string }`
+    
+    **Authentication**: Required
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deepfake Detection" icon="shield-check" href="/features/deepfake-detection">
+    Learn how video analysis works
+  </Card>
+  
+  <Card title="Frame Analysis" icon="film" href="/features/frame-analysis">
+    View detailed frame-by-frame breakdowns
+  </Card>
+</CardGroup>

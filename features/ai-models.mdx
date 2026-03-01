@@ -1,0 +1,530 @@
+---
+title: 'AI Models'
+description: 'Deep dive into the Vision Transformer and CNN+LSTM models powering deepfake detection'
+icon: 'brain'
+---
+
+## Overview
+
+IPD uses two state-of-the-art deep learning models for deepfake detection:
+
+1. **Vision Transformer (ViT)** - Primary model on port 5000
+2. **CNN+LSTM** - Legacy model on port 5001 for comparison
+
+Both models analyze video frames independently and provide confidence scores for authenticity.
+
+## Model Architecture
+
+<Tabs>
+  <Tab title="Vision Transformer (ViT)">
+    ### Architecture Details
+    
+    The Vision Transformer is IPD's primary detection model, offering superior accuracy on modern deepfakes.
+    
+    ```python
+    # backend/flask_server_2/app.py:38-64
+    def load_model():
+        global model
+        try:
+            model = ViT(
+                image_size=224,
+                patch_size=32,
+                num_classes=1,
+                dim=1024,
+                depth=6,
+                heads=16,
+                mlp_dim=2048,
+                dropout=0.1,
+                emb_dropout=0.1
+            )
+            
+            weights_path = os.path.join(MODEL_FOLDER, "as_model_0.837.pt")
+            model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
+            model.eval()  # Set to evaluation mode
+            return True
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            return False
+    ```
+    
+    ### Key Parameters
+    
+    <AccordionGroup>
+      <Accordion title="Image Size: 224x224">
+        All input frames are resized to 224x224 pixels. This is the standard input size for many computer vision models, balancing detail with computational efficiency.
+      </Accordion>
+      
+      <Accordion title="Patch Size: 32">
+        Each 224x224 image is divided into 32x32 pixel patches, creating a 7x7 grid (49 patches total). Each patch is treated as a "token" similar to words in natural language processing.
+      </Accordion>
+      
+      <Accordion title="Transformer Depth: 6 Layers">
+        The model has 6 transformer encoder layers. Each layer allows the model to learn increasingly complex patterns and relationships between image patches.
+      </Accordion>
+      
+      <Accordion title="Attention Heads: 16">
+        Each transformer layer uses 16 attention heads, allowing the model to focus on different aspects of the image simultaneously (e.g., facial features, lighting inconsistencies, artifacts).
+      </Accordion>
+      
+      <Accordion title="Dimension: 1024">
+        Each patch is embedded into a 1024-dimensional vector space. Higher dimensions allow the model to capture more nuanced features.
+      </Accordion>
+      
+      <Accordion title="MLP Dimension: 2048">
+        The feedforward network within each transformer layer has 2048 hidden units, providing computational capacity for complex transformations.
+      </Accordion>
+    </AccordionGroup>
+    
+    ### Training Performance
+    
+    The model weights file `as_model_0.837.pt` indicates an accuracy of **83.7%** on the validation dataset.
+    
+    <Note>
+    The Vision Transformer excels at detecting subtle artifacts in AI-generated faces and manipulation boundaries that traditional CNNs might miss.
+    </Note>
+  </Tab>
+  
+  <Tab title="CNN+LSTM">
+    ### Architecture Details
+    
+    The CNN+LSTM model is a legacy approach combining convolutional neural networks for feature extraction with LSTM for temporal analysis.
+    
+    ```python
+    # backend/flask_server/app.py:27-41
+    def load_model():
+        global model
+        try:
+            model_path = os.path.join(MODEL_FOLDER, 'deepfake_detection_model.h5')
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found at {model_path}")
+            
+            print(f"Loading model from {model_path}")
+            model = tf.keras.models.load_model(model_path, compile=False)
+            print("Model loaded successfully")
+            return True
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            return False
+    ```
+    
+    ### When to Use
+    
+    The CNN+LSTM model is available for:
+    - Comparison with ViT results
+    - Research and benchmarking
+    - Legacy video analysis
+    
+    <Warning>
+    The CNN+LSTM model is older and may have lower accuracy on modern deepfakes. It's recommended to use the ViT model for production analysis.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Image Preprocessing
+
+### Vision Transformer Preprocessing
+
+Frames undergo standardized preprocessing before analysis:
+
+```python
+# backend/flask_server_2/app.py:66-77
+def preprocess_frame(frame):
+    """Preprocess video frame for model input"""
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    pil_image = Image.fromarray(frame_rgb)
+    return preprocess(pil_image)
+```
+
+<Steps>
+  <Step title="Resize to 256x256">
+    Initial resize with aspect ratio preserved to slightly larger than target size.
+  </Step>
+  
+  <Step title="Center Crop to 224x224">
+    Extract the center 224x224 region to ensure consistent input dimensions.
+  </Step>
+  
+  <Step title="Convert to Tensor">
+    Transform the image into a PyTorch tensor with values in [0, 1] range.
+  </Step>
+  
+  <Step title="Normalize">
+    Apply ImageNet normalization:
+    - **Mean**: [0.485, 0.456, 0.406] (R, G, B)
+    - **Std**: [0.229, 0.224, 0.225] (R, G, B)
+    
+    This standardizes the input to match the distribution the model was trained on.
+  </Step>
+</Steps>
+
+### CNN+LSTM Preprocessing
+
+```python
+# backend/flask_server/app.py:77-105
+def analyze_frame(frame_path):
+    global model
+    try:
+        if model is None:
+            if not load_model():
+                raise Exception("Model not loaded")
+
+        # Prepare image for model
+        img = image.load_img(frame_path, target_size=(224, 224))
+        img_array = image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array /= 255.0  # Normalize to [0, 1]
+
+        # Get prediction
+        confidence = float(model.predict(img_array, verbose=0)[0][0])
+        is_fake = confidence < 0.5
+        
+        return confidence, is_fake
+    except Exception as e:
+        raise
+```
+
+## Inference Process
+
+### ViT Inference
+
+```python
+# backend/flask_server_2/app.py:114-137
+def analyze_frame(frame_path, threshold=0.5):
+    """Analyze a single frame using the ViT model"""
+    global model
+    try:
+        if model is None:
+            if not load_model():
+                raise Exception("Model not loaded")
+
+        # Read and preprocess frame
+        frame = cv2.imread(frame_path)
+        processed_frame = preprocess_frame(frame)
+        
+        # Get prediction
+        with torch.no_grad():
+            output = model(processed_frame.unsqueeze(0))
+            confidence = float(torch.sigmoid(output).cpu().numpy()[0][0])
+            is_fake = confidence < threshold
+            
+        return confidence, is_fake
+        
+    except Exception as e:
+        raise
+```
+
+<Info>
+`torch.no_grad()` disables gradient calculation, reducing memory consumption and speeding up inference.
+</Info>
+
+### Confidence Interpretation
+
+Both models output a confidence score between 0.0 and 1.0:
+
+```python
+confidence = float(torch.sigmoid(output).cpu().numpy()[0][0])
+is_fake = confidence < threshold  # threshold = 0.5
+```
+
+<CardGroup cols={2}>
+  <Card title="High Confidence (> 0.5)" icon="circle-check">
+    **Prediction**: REAL
+    
+    The model believes the frame is authentic.
+    
+    Examples:
+    - 0.87: High confidence - likely real
+    - 0.62: Moderate confidence - probably real
+  </Card>
+  
+  <Card title="Low Confidence (< 0.5)" icon="circle-xmark">
+    **Prediction**: FAKE
+    
+    The model believes the frame is manipulated.
+    
+    Examples:
+    - 0.23: High confidence - likely fake
+    - 0.42: Moderate confidence - probably fake
+  </Card>
+</CardGroup>
+
+## Model Comparison
+
+IPD supports running both models on the same video for comparison:
+
+```javascript
+// backend/routes/post.js:357-441
+router.post('/analyze-old-model/:postId', authMiddleware, async (req, res) => {
+  const post = await Post.findById(req.params.postId);
+  
+  // Check if analysis already exists
+  let oldAnalysis = await OldModelAnalysis.findOne({ post_id: post._id });
+  if (oldAnalysis) {
+    return res.json(oldAnalysis);
+  }
+
+  // Extract frames using flask_server_2
+  const extractResponse = await axios.post('http://localhost:5000/extract-frames', {
+    video_path: videoPath,
+    frames_dir: framesDir
+  });
+
+  // Analyze with old model (CNN+LSTM) on port 5001
+  const response = await axios.post('http://localhost:5001/analyze-frames', {
+    frames_dir: framesDir
+  });
+
+  // Save old model analysis separately
+  oldAnalysis = await OldModelAnalysis.create({
+    post_id: post._id,
+    frames_analysis: response.data.frames_analysis,
+    confidence: response.data.confidence,
+    is_fake: response.data.is_fake,
+    summary: summary
+  });
+
+  return res.json(oldAnalysis);
+});
+```
+
+### Separate Storage
+
+Results from each model are stored in different collections:
+
+<Tabs>
+  <Tab title="ViT Results">
+    Stored in the main `Post` document:
+    
+    ```javascript
+    // backend/models/Post.js:51-67
+    deepfake_analysis: {
+      is_fake: Boolean,
+      confidence: Number,
+      frames_analysis: [{
+        frame: String,
+        confidence: Number,
+        is_fake: Boolean,
+        frame_path: String
+      }],
+      summary: {
+        status: String,
+        confidence_percentage: Number,
+        total_frames: Number,
+        real_frames: Number,
+        fake_frames: Number
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="CNN+LSTM Results">
+    Stored in separate `OldModelAnalysis` collection:
+    
+    ```javascript
+    // backend/models/OldModelAnalysis.js:3-25
+    const oldModelAnalysisSchema = new mongoose.Schema({
+      post_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Post',
+        required: true
+      },
+      is_fake: Boolean,
+      confidence: Number,
+      frames_analysis: [{
+        frame: String,
+        confidence: Number,
+        is_fake: Boolean,
+        frame_path: String
+      }],
+      summary: {
+        status: String,
+        confidence_percentage: Number,
+        total_frames: Number,
+        real_frames: Number,
+        fake_frames: Number
+      }
+    }, { timestamps: true });
+    ```
+  </Tab>
+</Tabs>
+
+## Server Configuration
+
+### Flask Server Architecture
+
+IPD runs two Flask servers simultaneously:
+
+<CodeGroup>
+```python ViT Server (Port 5000)
+# backend/flask_server_2/app.py:246-252
+if __name__ == '__main__':
+    if load_model():
+        print("Starting server with ViT model loaded")
+        app.run(host='0.0.0.0', port=5000, debug=True)
+    else:
+        print("Failed to load model. Please ensure the model file exists.")
+```
+
+```python CNN+LSTM Server (Port 5001)
+# backend/flask_server/app.py:276-281
+if __name__ == '__main__':
+    if load_model():
+        print("Starting server with CNN+LSTM model loaded")
+        app.run(host='0.0.0.0', port=5001, debug=True)
+    else:
+        print("Failed to load model. Please ensure the model file exists.")
+```
+</CodeGroup>
+
+### CORS Configuration
+
+Both servers enable CORS for frontend access:
+
+```python
+# backend/flask_server_2/app.py:14-22
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+```
+
+## Performance Optimization
+
+<Accordion title="Model Loading">
+  Models are loaded once at server startup and kept in memory:
+  
+  ```python
+  # Global variable for model
+  model = None
+  
+  def load_model():
+      global model
+      # Load model only if not already loaded
+      if model is None:
+          # Load weights and initialize
+  ```
+  
+  This avoids reloading the model for each request, significantly improving response time.
+</Accordion>
+
+<Accordion title="Batch Processing">
+  While frames are currently analyzed sequentially, the architecture supports batch processing:
+  
+  ```python
+  # Potential batch optimization
+  batch_size = 8
+  for i in range(0, len(frames), batch_size):
+      batch = frames[i:i+batch_size]
+      # Process batch together
+  ```
+  
+  This could reduce inference time by ~40% for multi-frame videos.
+</Accordion>
+
+<Accordion title="GPU Acceleration">
+  The ViT model supports GPU acceleration:
+  
+  ```python
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+  model = model.to(device)
+  ```
+  
+  GPU inference is typically 5-10x faster than CPU for transformer models.
+</Accordion>
+
+## API Endpoints
+
+<Tabs>
+  <Tab title="Analyze Video (ViT)">
+    ```http
+    POST http://localhost:5000/analyze
+    Content-Type: multipart/form-data
+    ```
+    
+    Uploads and analyzes a complete video file.
+    
+    **Request Body**:
+    - `video`: Video file (multipart)
+    
+    **Response**:
+    ```json
+    {
+      "frames_analysis": [...],
+      "confidence": 0.82,
+      "is_fake": false,
+      "total_frames": 15,
+      "fake_frames_count": 3,
+      "real_frames_count": 12
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Analyze Frames (ViT)">
+    ```http
+    POST http://localhost:5000/analyze-frames
+    Content-Type: application/json
+    ```
+    
+    Analyzes pre-extracted frames from a directory.
+    
+    **Request Body**:
+    ```json
+    {
+      "frames_dir": "frames_video123"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Extract Frames">
+    ```http
+    POST http://localhost:5000/extract-frames
+    Content-Type: application/json
+    ```
+    
+    Extracts frames from a video without analysis.
+    
+    **Request Body**:
+    ```json
+    {
+      "video_path": "/path/to/video.mp4",
+      "frames_dir": "frames_video123"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="CNN+LSTM Analysis">
+    ```http
+    POST http://localhost:5001/analyze-frames
+    Content-Type: application/json
+    ```
+    
+    Analyzes frames using the legacy CNN+LSTM model.
+    
+    Same request/response format as ViT model.
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deepfake Detection" icon="shield-check" href="/features/deepfake-detection">
+    See how these models are integrated into the detection workflow
+  </Card>
+  
+  <Card title="Frame Analysis" icon="film" href="/features/frame-analysis">
+    Learn about frame extraction and visualization
+  </Card>
+</CardGroup>

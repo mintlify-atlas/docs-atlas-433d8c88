@@ -1,0 +1,790 @@
+---
+title: ML Models Setup
+description: Deploy Flask ML servers and configure deepfake detection models
+---
+
+## Overview
+
+The IPD application uses two Flask servers running machine learning models for deepfake detection:
+
+1. **Flask Server 1 (Port 5000)**: Vision Transformer (ViT) model
+2. **Flask Server 2 (Port 5001)**: CNN+LSTM model
+
+Both servers work together to analyze video content and detect potential deepfakes.
+
+## Architecture
+
+<Steps>
+  <Step title="Video Upload">
+    User uploads video through the frontend
+  </Step>
+  <Step title="Frame Extraction">
+    Backend extracts frames from video using FFmpeg
+  </Step>
+  <Step title="Model Analysis">
+    Both ML models analyze extracted frames independently
+  </Step>
+  <Step title="Result Aggregation">
+    Results are combined to determine if video is fake or real
+  </Step>
+</Steps>
+
+## Python Dependencies
+
+Both Flask servers require the following Python packages:
+
+<Tabs>
+  <Tab title="Flask Server 1 (ViT)">
+    Install dependencies for the Vision Transformer model:
+    
+    ```bash
+    cd backend/flask_server
+    pip install -r requirements.txt
+    ```
+    
+    Or install manually:
+    ```bash
+    pip install flask==3.0.0 \
+      flask-cors==4.0.0 \
+      torch==2.1.0 \
+      torchvision==0.16.0 \
+      vit-pytorch==1.7.1 \
+      opencv-python==4.8.1.78 \
+      pillow==10.1.0 \
+      werkzeug==3.0.1 \
+      numpy==1.26.2
+    ```
+    
+    <Accordion title="Package Details">
+      | Package | Version | Purpose |
+      |---------|---------|----------|
+      | `flask` | 3.0.0 | Web framework |
+      | `flask-cors` | 4.0.0 | CORS support |
+      | `torch` | 2.1.0 | PyTorch deep learning |
+      | `torchvision` | 0.16.0 | Computer vision utilities |
+      | `vit-pytorch` | 1.7.1 | Vision Transformer implementation |
+      | `opencv-python` | 4.8.1.78 | Video/image processing |
+      | `pillow` | 10.1.0 | Image manipulation |
+      | `werkzeug` | 3.0.1 | WSGI utilities |
+      | `numpy` | 1.26.2 | Numerical computing |
+    </Accordion>
+  </Tab>
+  
+  <Tab title="Flask Server 2 (CNN+LSTM)">
+    Install dependencies for the CNN+LSTM model:
+    
+    ```bash
+    cd backend/flask_server_2
+    pip install -r requirements.txt
+    ```
+    
+    Or install manually:
+    ```bash
+    pip install flask==3.0.0 \
+      flask-cors==4.0.0 \
+      tensorflow==2.15.0 \
+      opencv-python==4.8.1.78 \
+      pillow==10.1.0 \
+      werkzeug==3.0.1 \
+      numpy==1.26.2
+    ```
+    
+    <Accordion title="Package Details">
+      | Package | Version | Purpose |
+      |---------|---------|----------|
+      | `flask` | 3.0.0 | Web framework |
+      | `flask-cors` | 4.0.0 | CORS support |
+      | `tensorflow` | 2.15.0 | TensorFlow deep learning |
+      | `opencv-python` | 4.8.1.78 | Video/image processing |
+      | `pillow` | 10.1.0 | Image manipulation |
+      | `werkzeug` | 3.0.1 | WSGI utilities |
+      | `numpy` | 1.26.2 | Numerical computing |
+    </Accordion>
+  </Tab>
+</Tabs>
+
+<Warning>
+  PyTorch and TensorFlow are large packages (several GB). Installation may take significant time and disk space.
+</Warning>
+
+## Model Files
+
+### Required Model Files
+
+You need to download or train the following model files:
+
+<CardGroup cols={2}>
+  <Card title="ViT Model" icon="brain">
+    **File:** `as_model_0.837.pt`
+    
+    **Location:** `backend/flask_server/models/`
+    
+    **Size:** ~400MB
+    
+    **Description:** Vision Transformer model weights with 83.7% accuracy
+  </Card>
+  
+  <Card title="CNN+LSTM Model" icon="network-wired">
+    **File:** `deepfake_detection_model.h5`
+    
+    **Location:** `backend/flask_server_2/models/`
+    
+    **Size:** ~200MB
+    
+    **Description:** CNN+LSTM Keras model for deepfake detection
+  </Card>
+</CardGroup>
+
+### Model File Setup
+
+<Steps>
+  <Step title="Create Model Directories">
+    ```bash
+    mkdir -p backend/flask_server/models
+    mkdir -p backend/flask_server_2/models
+    ```
+  </Step>
+
+  <Step title="Download Model Files">
+    Place your trained model files in the appropriate directories:
+    
+    <CodeGroup>
+    ```bash ViT Model
+    # Copy or download ViT model
+    cp /path/to/as_model_0.837.pt backend/flask_server/models/
+    
+    # Verify file exists
+    ls -lh backend/flask_server/models/as_model_0.837.pt
+    ```
+    
+    ```bash CNN+LSTM Model
+    # Copy or download CNN+LSTM model
+    cp /path/to/deepfake_detection_model.h5 backend/flask_server_2/models/
+    
+    # Verify file exists
+    ls -lh backend/flask_server_2/models/deepfake_detection_model.h5
+    ```
+    </CodeGroup>
+    
+    <Warning>
+      Without these model files, the Flask servers will fail to start with the error:
+      ```
+      Model file not found at models/[model_name]
+      Failed to load model. Please ensure the model file exists.
+      ```
+    </Warning>
+  </Step>
+
+  <Step title="Verify Model Files">
+    Check that model files are correctly placed:
+    
+    ```bash
+    # Should show both model files
+    find backend -name "*.pt" -o -name "*.h5"
+    ```
+    
+    Expected output:
+    ```
+    backend/flask_server/models/as_model_0.837.pt
+    backend/flask_server_2/models/deepfake_detection_model.h5
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  If you don't have pre-trained models, you'll need to train them using your own dataset. Model training is outside the scope of this deployment guide.
+</Note>
+
+## Flask Server 1 Configuration (ViT)
+
+### Model Architecture
+
+The Vision Transformer model is configured with the following parameters:
+
+```python
+# backend/flask_server/app.py:42-52
+model = ViT(
+    image_size=224,      # Input image size
+    patch_size=32,       # Patch size for transformer
+    num_classes=1,       # Binary classification
+    dim=1024,           # Embedding dimension
+    depth=6,            # Number of transformer layers
+    heads=16,           # Number of attention heads
+    mlp_dim=2048,       # MLP hidden dimension
+    dropout=0.1,        # Dropout rate
+    emb_dropout=0.1     # Embedding dropout rate
+)
+```
+
+### Directory Structure
+
+```bash
+flask_server/
+├── app.py              # Main Flask application
+├── models/             # Model weights directory
+│   └── as_model_0.837.pt
+├── uploads/            # Temporary video uploads
+└── frames/            # Extracted video frames
+```
+
+### Running Flask Server 1
+
+<Steps>
+  <Step title="Navigate to Directory">
+    ```bash
+    cd backend/flask_server
+    ```
+  </Step>
+
+  <Step title="Ensure Model File Exists">
+    ```bash
+    ls -lh models/as_model_0.837.pt
+    ```
+  </Step>
+
+  <Step title="Start the Server">
+    <CodeGroup>
+    ```bash Development
+    python app.py
+    ```
+    
+    ```bash Production (Gunicorn)
+    pip install gunicorn
+    gunicorn -w 4 -b 0.0.0.0:5000 app:app
+    ```
+    
+    ```bash Production (uWSGI)
+    pip install uwsgi
+    uwsgi --http 0.0.0.0:5000 --wsgi-file app.py --callable app --processes 4
+    ```
+    </CodeGroup>
+    
+    <Info>
+      If successful, you'll see:
+      ```
+      Model loaded successfully
+      Starting server with ViT model loaded
+       * Running on http://0.0.0.0:5000
+      ```
+    </Info>
+  </Step>
+</Steps>
+
+### API Endpoints
+
+<AccordionGroup>
+  <Accordion title="POST /analyze">
+    Analyze a video file using the ViT model.
+    
+    **Request:**
+    ```bash
+    curl -X POST http://localhost:5000/analyze \
+      -F "video=@/path/to/video.mp4"
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "frames_analysis": [
+        {
+          "frame": "frame0.jpg",
+          "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+          "confidence": 0.82,
+          "is_fake": false
+        }
+      ],
+      "confidence": 0.75,
+      "is_fake": false,
+      "total_frames": 10,
+      "fake_frames_count": 3,
+      "real_frames_count": 7
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="POST /extract-frames">
+    Extract frames from a video without analysis.
+    
+    **Request:**
+    ```bash
+    curl -X POST http://localhost:5000/extract-frames \
+      -H "Content-Type: application/json" \
+      -d '{
+        "video_path": "uploads/video.mp4",
+        "frames_dir": "frames_video"
+      }'
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "success": true,
+      "message": "Frames extracted successfully",
+      "frames_count": 10
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="GET /uploads/frames/{path}">
+    Serve extracted frame images.
+    
+    **Request:**
+    ```bash
+    curl http://localhost:5000/uploads/frames/frames_video/frame0.jpg \
+      --output frame.jpg
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Flask Server 2 Configuration (CNN+LSTM)
+
+### Model Architecture
+
+The CNN+LSTM model is a pre-trained Keras model loaded from an H5 file:
+
+```python
+# backend/flask_server_2/app.py:31-36
+model_path = os.path.join(MODEL_FOLDER, 'deepfake_detection_model.h5')
+model = tf.keras.models.load_model(model_path, compile=False)
+```
+
+### Image Preprocessing
+
+Frames are preprocessed before analysis:
+
+```python
+# backend/flask_server_2/app.py:86-89
+img = image.load_img(frame_path, target_size=(224, 224))
+img_array = image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0)
+img_array /= 255.0  # Normalize to [0, 1]
+```
+
+### Directory Structure
+
+```bash
+flask_server_2/
+├── app.py                        # Main Flask application
+├── models/                       # Model weights directory
+│   └── deepfake_detection_model.h5
+├── uploads/                      # Temporary video uploads
+└── frames/                      # Extracted video frames
+```
+
+### Running Flask Server 2
+
+<Steps>
+  <Step title="Navigate to Directory">
+    ```bash
+    cd backend/flask_server_2
+    ```
+  </Step>
+
+  <Step title="Ensure Model File Exists">
+    ```bash
+    ls -lh models/deepfake_detection_model.h5
+    ```
+  </Step>
+
+  <Step title="Start the Server">
+    <CodeGroup>
+    ```bash Development
+    python app.py
+    ```
+    
+    ```bash Production (Gunicorn)
+    pip install gunicorn
+    gunicorn -w 4 -b 0.0.0.0:5001 app:app
+    ```
+    </CodeGroup>
+    
+    <Info>
+      If successful, you'll see:
+      ```
+      Model loaded successfully
+      Starting server with CNN+LSTM model loaded
+       * Running on http://0.0.0.0:5001
+      ```
+    </Info>
+  </Step>
+</Steps>
+
+### API Endpoints
+
+<AccordionGroup>
+  <Accordion title="POST /analyze">
+    Analyze a video file using the CNN+LSTM model.
+    
+    **Request:**
+    ```bash
+    curl -X POST http://localhost:5001/analyze \
+      -F "video=@/path/to/video.mp4"
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "frames_analysis": [
+        {
+          "frame": "frame0.jpg",
+          "frame_path": "/uploads/frames/frames_video/frame0.jpg",
+          "confidence": 0.68,
+          "is_fake": true
+        }
+      ],
+      "confidence": 0.45,
+      "is_fake": true,
+      "total_frames": 10,
+      "analysis_errors": 0,
+      "fake_frames_count": 7,
+      "real_frames_count": 3
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="POST /analyze-frames">
+    Analyze previously extracted frames.
+    
+    **Request:**
+    ```bash
+    curl -X POST http://localhost:5001/analyze-frames \
+      -H "Content-Type: application/json" \
+      -d '{"frames_dir": "frames_video"}'
+    ```
+    
+    **Response:**
+    ```json
+    {
+      "frames_analysis": [...],
+      "confidence": 0.45,
+      "is_fake": true,
+      "total_frames": 10,
+      "fake_frames_count": 7,
+      "real_frames_count": 3
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="GET /frames/{path}">
+    Serve extracted frame images.
+    
+    **Request:**
+    ```bash
+    curl http://localhost:5001/frames/frames_video/frame0.jpg \
+      --output frame.jpg
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Frame Extraction Process
+
+Both servers use OpenCV to extract frames from videos:
+
+```python
+# Extracts every 20th frame
+frames_num = 20
+if count % frames_num == 0:
+    frame_path = os.path.join(frames_dir, f"frame{count}.jpg")
+    cv2.imwrite(frame_path, image)
+```
+
+This reduces processing time while maintaining analysis accuracy.
+
+## Confidence Scoring
+
+### How It Works
+
+<Steps>
+  <Step title="Individual Frame Analysis">
+    Each frame receives a confidence score (0.0 to 1.0):
+    - **High score (greater than 0.5)**: Frame appears real
+    - **Low score (less than 0.5)**: Frame appears fake
+  </Step>
+
+  <Step title="Frame Classification">
+    ```python
+    is_fake = confidence < 0.5
+    ```
+  </Step>
+
+  <Step title="Video-Level Decision">
+    ```python
+    fake_frames = sum(1 for frame in frames_analysis if frame['is_fake'])
+    real_frames = num_frames - fake_frames
+    is_fake = fake_frames > real_frames  # Majority vote
+    ```
+  </Step>
+
+  <Step title="Average Confidence">
+    ```python
+    average_confidence = total_confidence / num_frames
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Model File Not Found">
+    **Error:**
+    ```
+    FileNotFoundError: Model file not found at models/[model_name]
+    ```
+    
+    **Solution:**
+    ```bash
+    # Check if model file exists
+    ls -lh backend/flask_server/models/as_model_0.837.pt
+    ls -lh backend/flask_server_2/models/deepfake_detection_model.h5
+    
+    # Create models directory if missing
+    mkdir -p backend/flask_server/models
+    mkdir -p backend/flask_server_2/models
+    
+    # Copy model files to correct location
+    ```
+  </Accordion>
+
+  <Accordion title="Port Already in Use">
+    **Error:**
+    ```
+    OSError: [Errno 98] Address already in use
+    ```
+    
+    **Solution:**
+    ```bash
+    # Find process using the port
+    lsof -i :5000
+    lsof -i :5001
+    
+    # Kill the process
+    kill -9 <PID>
+    
+    # Or use a different port
+    # In app.py, change:
+    app.run(host='0.0.0.0', port=5002, debug=True)
+    ```
+  </Accordion>
+
+  <Accordion title="CUDA/GPU Errors">
+    **Error:**
+    ```
+    RuntimeError: CUDA out of memory
+    ```
+    
+    **Solution:**
+    ```python
+    # Force CPU usage (in app.py)
+    import torch
+    torch.set_default_device('cpu')
+    
+    # Or for TensorFlow:
+    import os
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    ```
+  </Accordion>
+
+  <Accordion title="OpenCV Import Error">
+    **Error:**
+    ```
+    ImportError: libGL.so.1: cannot open shared object file
+    ```
+    
+    **Solution:**
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install -y libsm6 libxext6 libxrender-dev libgomp1 libglib2.0-0
+    
+    # Or use headless OpenCV
+    pip uninstall opencv-python
+    pip install opencv-python-headless
+    ```
+  </Accordion>
+
+  <Accordion title="Model Loading Errors">
+    **PyTorch model errors:**
+    ```bash
+    # Ensure PyTorch version matches training version
+    pip install torch==2.1.0 torchvision==0.16.0
+    ```
+    
+    **TensorFlow model errors:**
+    ```bash
+    # Try loading without compilation
+    model = tf.keras.models.load_model(model_path, compile=False)
+    ```
+  </Accordion>
+
+  <Accordion title="Memory Issues">
+    **Solution:**
+    ```python
+    # Reduce batch processing
+    # Process fewer frames at once
+    
+    # Clear frames after analysis
+    import shutil
+    shutil.rmtree(frames_dir)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Optimization
+
+<CardGroup cols={2}>
+  <Card title="GPU Acceleration" icon="rocket">
+    Enable CUDA for faster inference:
+    ```python
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    ```
+  </Card>
+  
+  <Card title="Frame Sampling" icon="images">
+    Adjust frame extraction rate:
+    ```python
+    frames_num = 30  # Extract every 30th frame
+    ```
+    Higher values = faster processing, lower accuracy
+  </Card>
+  
+  <Card title="Model Quantization" icon="compress">
+    Reduce model size for faster loading:
+    ```python
+    # PyTorch quantization
+    model = torch.quantization.quantize_dynamic(
+        model, {torch.nn.Linear}, dtype=torch.qint8
+    )
+    ```
+  </Card>
+  
+  <Card title="Batch Processing" icon="layer-group">
+    Process multiple frames simultaneously:
+    ```python
+    batch_size = 8
+    predictions = model(batch_frames)
+    ```
+  </Card>
+</CardGroup>
+
+## Production Deployment
+
+<Warning>
+  The default Flask development server is not suitable for production. Use a production WSGI server.
+</Warning>
+
+### Using Gunicorn
+
+```bash
+# Install Gunicorn
+pip install gunicorn
+
+# Run Flask Server 1
+cd backend/flask_server
+gunicorn -w 4 -b 0.0.0.0:5000 --timeout 300 app:app
+
+# Run Flask Server 2
+cd backend/flask_server_2
+gunicorn -w 4 -b 0.0.0.0:5001 --timeout 300 app:app
+```
+
+### Using Supervisor (Auto-restart)
+
+```ini /etc/supervisor/conf.d/flask-server-1.conf
+[program:flask-server-1]
+command=gunicorn -w 4 -b 0.0.0.0:5000 --timeout 300 app:app
+directory=/path/to/backend/flask_server
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/flask-server-1.err.log
+stdout_logfile=/var/log/flask-server-1.out.log
+```
+
+### Using Docker
+
+<CodeGroup>
+```dockerfile Flask Server 1
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    libsm6 libxext6 libxrender-dev libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "--timeout", "300", "app:app"]
+```
+
+```dockerfile Flask Server 2
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    libsm6 libxext6 libxrender-dev libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 5001
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5001", "--timeout", "300", "app:app"]
+```
+</CodeGroup>
+
+## Testing the ML Servers
+
+Verify both servers are working correctly:
+
+<Steps>
+  <Step title="Health Check">
+    ```bash
+    # Check if servers are responding
+    curl http://localhost:5000/
+    curl http://localhost:5001/
+    ```
+  </Step>
+
+  <Step title="Test Video Analysis">
+    ```bash
+    # Test Flask Server 1
+    curl -X POST http://localhost:5000/analyze \
+      -F "video=@test_video.mp4" \
+      | jq '.confidence, .is_fake'
+    
+    # Test Flask Server 2
+    curl -X POST http://localhost:5001/analyze \
+      -F "video=@test_video.mp4" \
+      | jq '.confidence, .is_fake'
+    ```
+  </Step>
+
+  <Step title="Verify Frame Extraction">
+    ```bash
+    # Check frames directory
+    ls -la backend/flask_server/frames/
+    ls -la backend/flask_server_2/frames/
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Setup" icon="server" href="/deployment/backend-setup">
+    Configure the Express backend server
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Configure environment settings
+  </Card>
+  <Card title="Testing" icon="vial" href="/deployment/testing">
+    Run end-to-end tests of the complete system
+  </Card>
+</CardGroup>

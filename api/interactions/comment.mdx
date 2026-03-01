@@ -1,0 +1,132 @@
+---
+title: "Add Comment"
+api: "POST /api/posts/:id/comments"
+description: "Add a new comment to a post"
+---
+
+## Authentication
+
+This endpoint requires authentication. Include a valid JWT token in the Authorization header.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the post to comment on
+</ParamField>
+
+## Request Body
+
+<ParamField body="content" type="string" required>
+  The text content of the comment
+</ParamField>
+
+## Response
+
+Returns the newly created comment with user information populated.
+
+<ResponseField name="id" type="string">
+  Unique identifier for the comment
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  The comment text content
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  ISO 8601 timestamp when the comment was created
+</ResponseField>
+
+<ResponseField name="profiles" type="object">
+  User information for the comment author
+  <ResponseField name="profiles.username" type="string">
+    Username of the comment author
+  </ResponseField>
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="message" type="string">
+  Error message describing what went wrong
+</ResponseField>
+
+**Common error responses:**
+- `404` - Post not found
+- `401` - Unauthorized (missing or invalid token)
+- `500` - Internal server error
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.example.com/api/posts/507f1f77bcf86cd799439011/comments \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Great analysis! This video definitely looks suspicious."}'
+```
+
+```javascript JavaScript
+const response = await fetch('/api/posts/507f1f77bcf86cd799439011/comments', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    content: 'Great analysis! This video definitely looks suspicious.'
+  })
+});
+
+const comment = await response.json();
+console.log('Comment added:', comment);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.example.com/api/posts/507f1f77bcf86cd799439011/comments',
+    headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    },
+    json={'content': 'Great analysis! This video definitely looks suspicious.'}
+)
+
+comment = response.json()
+print('Comment added:', comment)
+```
+
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "id": "65f1234567890abcdef12345",
+  "content": "Great analysis! This video definitely looks suspicious.",
+  "created_at": "2026-03-01T14:30:00.000Z",
+  "profiles": {
+    "username": "detective_user"
+  }
+}
+```
+
+<Note>
+  The comment is automatically associated with the authenticated user extracted from the JWT token. The `created_at` timestamp is set server-side when the comment is created.
+</Note>
+
+## Implementation Details
+
+The endpoint performs the following steps:
+
+1. Validates that the post exists in the database
+2. Creates a new comment object with:
+   - User ID from the authenticated request (`req.user.id`)
+   - Content from the request body
+   - Current timestamp
+3. Appends the comment to the post's `comments` array
+4. Saves the post and populates user information
+5. Returns the newly added comment with transformed structure
+
+See `backend/routes/post.js:206-242` for the complete implementation.

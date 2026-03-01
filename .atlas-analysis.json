@@ -1,0 +1,136 @@
+{
+  "projectType": "saas",
+  "projectName": "IPD - Intelligent Post Detector",
+  "projectDescription": "AI-powered social media platform for detecting deepfakes in videos and images using advanced machine learning models",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/deepfake-detection",
+              "features/social-platform",
+              "features/ai-models",
+              "features/frame-analysis"
+            ]
+          },
+          {
+            "group": "User Guide",
+            "pages": [
+              "guide/authentication",
+              "guide/creating-posts",
+              "guide/analyzing-videos",
+              "guide/viewing-results",
+              "guide/community"
+            ]
+          },
+          {
+            "group": "AI Models",
+            "pages": [
+              "models/overview",
+              "models/vit-transformer",
+              "models/cnn-lstm",
+              "models/comparison"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/signup",
+              "api/auth/signin"
+            ]
+          },
+          {
+            "group": "Posts",
+            "pages": [
+              "api/posts/create",
+              "api/posts/get-all",
+              "api/posts/get-single",
+              "api/posts/user-posts"
+            ]
+          },
+          {
+            "group": "Interactions",
+            "pages": [
+              "api/interactions/like",
+              "api/interactions/comment"
+            ]
+          },
+          {
+            "group": "Analysis",
+            "pages": [
+              "api/analysis/analyze-frames",
+              "api/analysis/old-model",
+              "api/analysis/get-results"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "deployment/prerequisites",
+              "deployment/backend-setup",
+              "deployment/frontend-setup",
+              "deployment/ml-models"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "deployment/environment-variables",
+              "deployment/database",
+              "deployment/flask-servers"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AI-powered deepfake detection using Vision Transformer (ViT) and CNN+LSTM models",
+    "Frame-by-frame video analysis with confidence scores",
+    "Social media platform with posts, likes, and comments",
+    "User authentication and personalized dashboard",
+    "Real-time video processing and analysis",
+    "Dual model comparison for enhanced accuracy"
+  ],
+  "publicApiSurface": [
+    "POST /signup",
+    "POST /signin",
+    "GET /api/posts",
+    "GET /api/posts/:id",
+    "POST /api/posts",
+    "POST /api/posts/:id/like",
+    "POST /api/posts/:id/comments",
+    "GET /api/posts/user/posts",
+    "POST /api/posts/analyze/:postId",
+    "POST /api/posts/analyze-old-model/:postId",
+    "GET /api/posts/old-model-analysis/:postId",
+    "POST /analyze (Flask - ViT Model)",
+    "POST /analyze-frames (Flask - CNN+LSTM Model)",
+    "POST /extract-frames (Flask)"
+  ]
+}
